@@ -8,12 +8,23 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "lint": "echo \"TODO: add linter\""
+    "test": "vitest run --passWithNoTests",
+    "lint": "echo \"TODO: add linter\"",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx src/scripts/migrate.ts",
+    "db:studio": "drizzle-kit studio",
+    "db:seed": "tsx src/scripts/seed.ts"
   },
   "dependencies": {
-    "@enrich/shared": "workspace:*"
+    "@enrich/shared": "workspace:*",
+    "drizzle-orm": "^0.45.4",
+    "pg": "^8.23.1"
   },
   "devDependencies": {
+    "@types/node": "^26.6.4",
+    "@types/pg": "^8.23.1",
+    "drizzle-kit": "^0.31.11",
+    "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   }
 }

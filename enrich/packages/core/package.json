@@ -8,6 +8,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
     "lint": "echo \"TODO: add linter\""
   },
   "dependencies": {

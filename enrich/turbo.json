@@ -6,12 +6,28 @@
       "persistent": true
     },
     "build": {
-      "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        ".next/**",
+        "!.next/cache/**",
+        "dist/**"
+      ]
     },
     "typecheck": {
-      "dependsOn": ["^typecheck"]
+      "dependsOn": [
+        "^typecheck"
+      ]
     },
-    "lint": {}
+    "lint": {},
+    "test": {
+      "dependsOn": [
+        "^typecheck"
+      ],
+      "env": [
+        "TEST_DATABASE_URL"
+      ]
+    }
   }
 }

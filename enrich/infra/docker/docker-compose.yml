@@ -1,0 +1,14 @@
+# Local Postgres for development: docker compose -f infra/docker/docker-compose.yml up -d
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: enrich
+      POSTGRES_PASSWORD: enrich
+      POSTGRES_DB: enrich
+    ports:
+      - "5432:5432"
+    volumes:
+      - enrich-pg:/var/lib/postgresql
+volumes:
+  enrich-pg:

@@ -8,13 +8,17 @@
     "build": "tsup",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
     "lint": "echo \"TODO: add linter\""
   },
   "dependencies": {
     "@enrich/core": "workspace:*",
     "@enrich/db": "workspace:*",
     "@enrich/providers": "workspace:*",
-    "@enrich/shared": "workspace:*"
+    "@enrich/shared": "workspace:*",
+    "pg-boss": "^12.37.1",
+    "pino": "^10.4.0",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/node": "^26.6.4",
