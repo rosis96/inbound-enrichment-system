@@ -1,0 +1,25 @@
+{
+  "name": "@enrich/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsup",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo \"TODO: add linter\""
+  },
+  "dependencies": {
+    "@enrich/core": "workspace:*",
+    "@enrich/db": "workspace:*",
+    "@enrich/providers": "workspace:*",
+    "@enrich/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "tsup": "^8.5.1",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}
