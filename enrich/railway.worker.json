@@ -1,0 +1,11 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "RAILPACK",
+    "buildCommand": "pnpm turbo run build --filter=@enrich/worker"
+  },
+  "deploy": {
+    "startCommand": "pnpm --filter @enrich/worker start",
+    "restartPolicyType": "ALWAYS"
+  }
+}
