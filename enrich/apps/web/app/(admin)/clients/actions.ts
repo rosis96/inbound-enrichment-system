@@ -1,0 +1,65 @@
+"use server";
+
+import { clients, eq, getDb } from "@enrich/db";
+import { ClientSettings } from "@enrich/shared";
+import { generateToken } from "@enrich/shared/crypto";
+import { randomUUID } from "node:crypto";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { requireAdmin } from "@/lib/auth";
+
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 100);
+}
+
+/** "https://www.Acme.com/about" → "acme.com" */
+function toDomain(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/^[a-z]+:\/\//, "")
+    .replace(/^www\./, "")
+    .split(/[/?#:]/)[0]!;
+}
+
+function fail(message: string): never {
+  redirect(`/clients?error=${encodeURIComponent(message)}`);
+}
+
+/** Creates a client in dry run with default settings and fresh webhook tokens. */
+export async function createClient(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const name = String(formData.get("name") ?? "").trim();
+  const slug = slugify(String(formData.get("slug") ?? "").trim() || name);
+  const domains = String(formData.get("ownDomains") ?? "")
+    .split(/[\n,]/)
+    .map(toDomain)
+    .filter(Boolean);
+
+  if (!name) fail("Name is required");
+  if (name.length > 255) fail("Name is too long");
+  if (!slug) fail("Slug needs at least one letter or digit");
+
+  const db = getDb();
+  const [taken] = await db.select({ id: clients.id }).from(clients).where(eq(clients.slug, slug));
+  if (taken) fail(`Slug "${slug}" is already used`);
+
+  const id = randomUUID();
+  await db.insert(clients).values({
+    id,
+    name,
+    slug,
+    dryRun: true,
+    happierleadsToken: generateToken(),
+    instantlyWebhookToken: generateToken(),
+    settings: ClientSettings.parse({ ownDomains: domains }),
+  });
+
+  revalidatePath("/clients");
+  redirect(`/settings?client=${id}&created=1`);
+}

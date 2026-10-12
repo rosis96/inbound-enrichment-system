@@ -29,7 +29,7 @@ function ListField({ name, label, values, hint }: { name: string; label: string;
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ client?: string; saved?: string; error?: string }>;
+  searchParams: Promise<{ client?: string; saved?: string; created?: string; error?: string }>;
 }) {
   await requireAdmin();
   const params = await searchParams;
@@ -38,7 +38,7 @@ export default async function SettingsPage({
   if (!client) {
     return (
       <p className="text-sm text-slate-500">
-        No clients yet. Run <code>pnpm db:seed</code>.
+        No clients yet. Add one on the <Link href="/clients" className="underline">Clients</Link> page.
       </p>
     );
   }
@@ -61,6 +61,11 @@ export default async function SettingsPage({
         ))}
       </div>
 
+      {params.created && (
+        <p className="rounded bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          Client added in dry run. Set its ICP, campaign and Instantly API key below; its webhook URL is on the Clients page.
+        </p>
+      )}
       {params.saved && (
         <p className="rounded bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
           Saved. New leads use these settings; use Reprocess on a lead to re-score it.
