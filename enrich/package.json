@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "turbo run dev --filter=@enrich/web --filter=@enrich/worker",
     "build": "turbo run build",
+    "start": "node scripts/start.mjs",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
     "test": "turbo run test",
