@@ -1,25 +1,25 @@
-import { index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
-import { id, timestamps } from "./_shared";
+import { index, mysqlTable, varchar } from "drizzle-orm/mysql-core";
+import { id, json, timestamps, utcDatetime, uuidRef } from "./_shared";
 import { clients } from "./clients";
 import { contacts } from "./contacts";
 import { rawEvents } from "./events";
 
-export const outreachEvents = pgTable(
+export const outreachEvents = mysqlTable(
   "outreach_events",
   {
     id: id(),
-    clientId: uuid("client_id")
+    clientId: uuidRef("client_id")
       .notNull()
       .references(() => clients.id, { onDelete: "cascade" }),
-    contactId: uuid("contact_id").references(() => contacts.id, { onDelete: "set null" }),
-    rawEventId: uuid("raw_event_id")
+    contactId: uuidRef("contact_id").references(() => contacts.id, { onDelete: "set null" }),
+    rawEventId: uuidRef("raw_event_id")
       .notNull()
       .references(() => rawEvents.id, { onDelete: "cascade" }),
-    eventType: text("event_type").notNull(),
-    campaignId: text("campaign_id"),
-    leadEmail: text("lead_email"),
-    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
-    payload: jsonb("payload").$type<unknown>().notNull(),
+    eventType: varchar("event_type", { length: 100 }).notNull(),
+    campaignId: varchar("campaign_id", { length: 64 }),
+    leadEmail: varchar("lead_email", { length: 320 }),
+    occurredAt: utcDatetime("occurred_at").notNull(),
+    payload: json("payload").$type<unknown>().notNull(),
     ...timestamps(),
   },
   (t) => [

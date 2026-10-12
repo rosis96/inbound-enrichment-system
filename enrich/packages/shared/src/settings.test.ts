@@ -4,7 +4,7 @@ import { ClientSettings, DEFAULT_FREE_EMAIL_DOMAINS, parseClientSettings } from 
 describe("ClientSettings", () => {
   it("fills every default from an empty object", () => {
     const settings = parseClientSettings({});
-    expect(settings.icp.minScore).toBe(50);
+    expect(settings.icp.minScore).toBe(80);
     expect(settings.icp.countries).toEqual([]);
     expect(settings.contacts).toEqual({ maxPerCompany: 1, usePeopleSearchWhenEmpty: false });
     expect(settings.dedupeDays).toBe(60);
@@ -14,7 +14,7 @@ describe("ClientSettings", () => {
   });
 
   it("treats null as empty settings", () => {
-    expect(parseClientSettings(null).icp.minScore).toBe(50);
+    expect(parseClientSettings(null).icp.minScore).toBe(80);
   });
 
   it("keeps partial nested values and defaults the rest", () => {

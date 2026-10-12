@@ -7,7 +7,7 @@ loadRootEnvFile();
 const nextConfig: NextConfig = {
   // Internal workspace packages ship TypeScript source.
   transpilePackages: ["@enrich/core", "@enrich/db", "@enrich/providers", "@enrich/shared"],
-  serverExternalPackages: ["pg", "pino"],
+  serverExternalPackages: ["mysql2", "pino"],
 };
 
 export default nextConfig;

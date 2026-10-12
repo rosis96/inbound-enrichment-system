@@ -9,7 +9,7 @@ export async function recordHeartbeat(db: Database, workerId: string, startedAt:
   await db
     .insert(workerHeartbeats)
     .values({ workerId, hostname: hostname(), pid: process.pid, startedAt, lastBeatAt: now })
-    .onConflictDoUpdate({ target: workerHeartbeats.workerId, set: { lastBeatAt: now } });
+    .onDuplicateKeyUpdate({ set: { lastBeatAt: now } });
 }
 
 /** Writes a heartbeat now and every interval. Returns a stop function. */

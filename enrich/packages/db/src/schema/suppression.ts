@@ -1,21 +1,21 @@
 import { sql } from "drizzle-orm";
-import { check, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
-import { id, timestamps } from "./_shared";
+import { check, mysqlTable, unique, varchar } from "drizzle-orm/mysql-core";
+import { id, timestamps, utcDatetime, uuidRef } from "./_shared";
 import { clients } from "./clients";
 import { suppressionKind, suppressionReason, suppressionSource } from "./enums";
 
-export const suppression = pgTable(
+export const suppression = mysqlTable(
   "suppression",
   {
     id: id(),
-    clientId: uuid("client_id")
+    clientId: uuidRef("client_id")
       .notNull()
       .references(() => clients.id, { onDelete: "cascade" }),
     kind: suppressionKind("kind").notNull(),
-    value: text("value").notNull(),
+    value: varchar("value", { length: 320 }).notNull(),
     reason: suppressionReason("reason").notNull(),
     source: suppressionSource("source").notNull(),
-    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    expiresAt: utcDatetime("expires_at"),
     ...timestamps(),
   },
   (t) => [

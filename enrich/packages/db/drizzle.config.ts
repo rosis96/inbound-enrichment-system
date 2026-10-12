@@ -4,7 +4,7 @@ import { defineConfig } from "drizzle-kit";
 loadRootEnvFile();
 
 export default defineConfig({
-  dialect: "postgresql",
+  dialect: "mysql",
   schema: "./src/schema/index.ts",
   out: "./migrations",
   dbCredentials: { url: process.env.DATABASE_URL ?? "" },

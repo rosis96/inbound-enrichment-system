@@ -1,5 +1,5 @@
 import { loadRootEnvFile } from "@enrich/shared/env";
-import { migrate } from "drizzle-orm/node-postgres/migrator";
+import { migrate } from "drizzle-orm/mysql2/migrator";
 import { fileURLToPath } from "node:url";
 import { createDb } from "../client";
 

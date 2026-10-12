@@ -5,5 +5,3 @@ packages:
 allowBuilds:
   esbuild: true
 
-minimumReleaseAgeExclude:
-  - pg-boss@12.37.1

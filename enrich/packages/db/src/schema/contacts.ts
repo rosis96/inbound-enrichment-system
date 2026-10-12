@@ -1,35 +1,35 @@
 import type { PersonalisationMeta } from "@enrich/shared";
-import { boolean, index, jsonb, pgTable, text, uuid } from "drizzle-orm/pg-core";
-import { id, timestamps } from "./_shared";
+import { boolean, index, mysqlTable, text, varchar } from "drizzle-orm/mysql-core";
+import { id, json, timestamps, uuidRef } from "./_shared";
 import { clients } from "./clients";
 import { emailStatus, outreachStatus } from "./enums";
 import { leads } from "./leads";
 
-export const contacts = pgTable(
+export const contacts = mysqlTable(
   "contacts",
   {
     id: id(),
-    leadId: uuid("lead_id")
+    leadId: uuidRef("lead_id")
       .notNull()
       .references(() => leads.id, { onDelete: "cascade" }),
-    clientId: uuid("client_id")
+    clientId: uuidRef("client_id")
       .notNull()
       .references(() => clients.id, { onDelete: "cascade" }),
-    firstName: text("first_name"),
-    lastName: text("last_name"),
-    fullName: text("full_name"),
-    title: text("title"),
-    seniority: text("seniority"),
-    linkedinUrl: text("linkedin_url"),
-    email: text("email"),
+    firstName: varchar("first_name", { length: 255 }),
+    lastName: varchar("last_name", { length: 255 }),
+    fullName: varchar("full_name", { length: 255 }),
+    title: varchar("title", { length: 255 }),
+    seniority: varchar("seniority", { length: 50 }),
+    linkedinUrl: varchar("linkedin_url", { length: 500 }),
+    email: varchar("email", { length: 320 }),
     emailStatus: emailStatus("email_status"),
     // `happierleads` or `finder:<provider name>`
-    emailSource: text("email_source"),
+    emailSource: varchar("email_source", { length: 100 }),
     selected: boolean("selected").notNull().default(false),
     firstLine: text("first_line"),
-    subjectLine: text("subject_line"),
-    personalisationMeta: jsonb("personalisation_meta").$type<PersonalisationMeta>(),
-    instantlyLeadId: text("instantly_lead_id"),
+    subjectLine: varchar("subject_line", { length: 255 }),
+    personalisationMeta: json("personalisation_meta").$type<PersonalisationMeta>(),
+    instantlyLeadId: varchar("instantly_lead_id", { length: 64 }),
     outreachStatus: outreachStatus("outreach_status").notNull().default("not_sent"),
     ...timestamps(),
   },

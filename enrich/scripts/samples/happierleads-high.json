@@ -1,0 +1,27 @@
+{
+  "event": "company.identified",
+  "createdAt": "2026-10-11T09:14:00Z",
+  "company": {
+    "name": "Northwind Analytics",
+    "domain": "https://www.northwind-analytics.example/",
+    "industry": "Software",
+    "employees": "11-50",
+    "revenue": "$1M-$10M",
+    "location": { "country": "United Kingdom", "city": "Leeds" },
+    "linkedin": "https://www.linkedin.com/company/northwind-analytics"
+  },
+  "session": {
+    "referrer": "https://www.google.com/",
+    "duration": 312,
+    "pages": [
+      { "url": "https://demo-agency.example/", "title": "Home", "timestamp": "2026-10-11T09:10:02Z" },
+      { "url": "https://demo-agency.example/services/seo-audits", "title": "SEO audits", "timestamp": "2026-10-11T09:11:40Z" },
+      { "url": "https://demo-agency.example/pricing?plan=growth", "title": "Pricing", "timestamp": "2026-10-11T09:13:05Z" }
+    ]
+  },
+  "contacts": [
+    { "firstName": "Priya", "lastName": "Shah", "position": "Founder & CEO", "email": "Priya@Northwind-Analytics.example", "linkedin": "https://www.linkedin.com/in/priya-shah-example" },
+    { "firstName": "Tom", "lastName": "Reed", "position": "Marketing Intern", "email": "tom@northwind-analytics.example", "linkedin": null },
+    { "firstName": null, "lastName": null, "position": "Office Manager", "email": null }
+  ]
+}

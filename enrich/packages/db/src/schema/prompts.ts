@@ -1,16 +1,16 @@
-import { boolean, integer, pgTable, text, unique } from "drizzle-orm/pg-core";
+import { boolean, int, mysqlTable, text, unique, varchar } from "drizzle-orm/mysql-core";
 import { id, timestamps } from "./_shared";
 import { promptKey } from "./enums";
 
-export const prompts = pgTable(
+export const prompts = mysqlTable(
   "prompts",
   {
     id: id(),
     key: promptKey("key").notNull(),
-    version: integer("version").notNull(),
+    version: int("version").notNull(),
     template: text("template").notNull(),
     // Null means "use OPENAI_MODEL from env".
-    model: text("model"),
+    model: varchar("model", { length: 100 }),
     active: boolean("active").notNull().default(false),
     ...timestamps(),
   },

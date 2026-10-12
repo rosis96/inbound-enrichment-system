@@ -1,21 +1,24 @@
 import type { ClientSettingsInput } from "@enrich/shared";
-import { boolean, jsonb, numeric, pgTable, text } from "drizzle-orm/pg-core";
-import { id, timestamps } from "./_shared";
+import { boolean, decimal, mysqlTable, varchar } from "drizzle-orm/mysql-core";
+import { id, json, timestamps } from "./_shared";
 import { clientStatus } from "./enums";
 
-export const clients = pgTable("clients", {
+export const clients = mysqlTable("clients", {
   id: id(),
-  name: text("name").notNull(),
-  slug: text("slug").notNull().unique(),
+  name: varchar("name", { length: 255 }).notNull(),
+  slug: varchar("slug", { length: 100 }).notNull().unique(),
   status: clientStatus("status").notNull().default("active"),
   dryRun: boolean("dry_run").notNull().default(true),
   autoApprove: boolean("auto_approve").notNull().default(false),
-  happierleadsToken: text("happierleads_token").notNull().unique(),
-  instantlyWebhookToken: text("instantly_webhook_token").notNull().unique(),
+  happierleadsToken: varchar("happierleads_token", { length: 64 }).notNull().unique(),
+  instantlyWebhookToken: varchar("instantly_webhook_token", { length: 64 }).notNull().unique(),
   // AES-256-GCM, `iv:tag:ciphertext`. Decrypted only in the worker at push time.
-  instantlyApiKeyEnc: text("instantly_api_key_enc"),
+  instantlyApiKeyEnc: varchar("instantly_api_key_enc", { length: 1024 }),
   // Always read through parseClientSettings() so defaults apply.
-  settings: jsonb("settings").$type<ClientSettingsInput>().notNull().default({}),
-  monthlyBudgetUsd: numeric("monthly_budget_usd", { precision: 12, scale: 2, mode: "number" }),
+  settings: json("settings")
+    .$type<ClientSettingsInput>()
+    .notNull()
+    .$defaultFn(() => ({})),
+  monthlyBudgetUsd: decimal("monthly_budget_usd", { precision: 12, scale: 2, mode: "number" }),
   ...timestamps(),
 });

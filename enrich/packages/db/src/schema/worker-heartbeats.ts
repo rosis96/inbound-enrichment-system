@@ -1,12 +1,12 @@
-import { integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
-import { id, timestamps } from "./_shared";
+import { int, mysqlTable, varchar } from "drizzle-orm/mysql-core";
+import { id, timestamps, utcDatetime } from "./_shared";
 
-export const workerHeartbeats = pgTable("worker_heartbeats", {
+export const workerHeartbeats = mysqlTable("worker_heartbeats", {
   id: id(),
-  workerId: text("worker_id").notNull().unique(),
-  hostname: text("hostname").notNull(),
-  pid: integer("pid").notNull(),
-  startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
-  lastBeatAt: timestamp("last_beat_at", { withTimezone: true }).notNull(),
+  workerId: varchar("worker_id", { length: 200 }).notNull().unique(),
+  hostname: varchar("hostname", { length: 255 }).notNull(),
+  pid: int("pid").notNull(),
+  startedAt: utcDatetime("started_at").notNull(),
+  lastBeatAt: utcDatetime("last_beat_at").notNull(),
   ...timestamps(),
 });

@@ -1,14 +1,17 @@
-# Local Postgres for development: docker compose -f infra/docker/docker-compose.yml up -d
+# Local MySQL for development: docker compose -f infra/docker/docker-compose.yml up -d
+# DATABASE_URL=mysql://enrich:enrich@127.0.0.1:3306/enrich
 services:
-  postgres:
-    image: postgres:18
+  mysql:
+    image: mysql:8.4
     environment:
-      POSTGRES_USER: enrich
-      POSTGRES_PASSWORD: enrich
-      POSTGRES_DB: enrich
+      MYSQL_ROOT_PASSWORD: enrich
+      MYSQL_USER: enrich
+      MYSQL_PASSWORD: enrich
+      MYSQL_DATABASE: enrich
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
     ports:
-      - "5432:5432"
+      - "3306:3306"
     volumes:
-      - enrich-pg:/var/lib/postgresql
+      - enrich-mysql:/var/lib/mysql
 volumes:
-  enrich-pg:
+  enrich-mysql:

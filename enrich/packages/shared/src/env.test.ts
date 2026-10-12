@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { EnvError, parseEnv } from "./env";
 
 const KEY = Buffer.alloc(32, 7).toString("base64");
-const base = { DATABASE_URL: "postgres://u:p@localhost:5432/enrich", ENCRYPTION_KEY: KEY };
+const base = { DATABASE_URL: "mysql://u:p@localhost:3306/enrich", ENCRYPTION_KEY: KEY };
 
 describe("parseEnv", () => {
   it("applies safe defaults", () => {
@@ -42,7 +42,7 @@ describe("parseEnv", () => {
     }
   });
 
-  it("rejects non-postgres database urls", () => {
-    expect(() => parseEnv({ ...base, DATABASE_URL: "mysql://localhost/x" })).toThrow(EnvError);
+  it("rejects non-mysql database urls", () => {
+    expect(() => parseEnv({ ...base, DATABASE_URL: "postgres://localhost/x" })).toThrow(EnvError);
   });
 });

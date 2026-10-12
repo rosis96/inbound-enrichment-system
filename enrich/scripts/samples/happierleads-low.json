@@ -1,0 +1,22 @@
+{
+  "event": "company.identified",
+  "createdAt": "2026-10-11T10:02:00Z",
+  "company": {
+    "name": "Brightside Retail",
+    "domain": "brightside-retail.example",
+    "industry": "Retail",
+    "employees": "1001-5000",
+    "location": { "country": "Germany" },
+    "linkedin": null
+  },
+  "session": {
+    "referrer": null,
+    "pages": [
+      { "url": "https://demo-agency.example/blog", "title": "Blog" },
+      { "url": "https://demo-agency.example/careers/designer", "title": "Careers" }
+    ]
+  },
+  "contacts": [
+    { "firstName": "Lena", "lastName": "Vogel", "position": "Store Assistant", "email": "lena@brightside-retail.example" }
+  ]
+}

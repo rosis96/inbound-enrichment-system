@@ -1,35 +1,38 @@
 import type { IcpReason, LeadPage } from "@enrich/shared";
-import { index, integer, jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
-import { id, timestamps } from "./_shared";
+import { index, int, mysqlTable, text, unique, varchar } from "drizzle-orm/mysql-core";
+import { id, json, timestamps, utcDatetime, uuidRef } from "./_shared";
 import { clients } from "./clients";
 import { companies } from "./companies";
 import { intentLevel, leadStatus } from "./enums";
 import { rawEvents } from "./events";
 
-export const leads = pgTable(
+export const leads = mysqlTable(
   "leads",
   {
     id: id(),
-    clientId: uuid("client_id")
+    clientId: uuidRef("client_id")
       .notNull()
       .references(() => clients.id, { onDelete: "cascade" }),
-    companyId: uuid("company_id")
+    companyId: uuidRef("company_id")
       .notNull()
       .references(() => companies.id),
-    rawEventId: uuid("raw_event_id")
+    rawEventId: uuidRef("raw_event_id")
       .notNull()
       .references(() => rawEvents.id),
-    visitedAt: timestamp("visited_at", { withTimezone: true }),
-    pages: jsonb("pages").$type<LeadPage[]>().notNull().default([]),
+    visitedAt: utcDatetime("visited_at"),
+    pages: json("pages")
+      .$type<LeadPage[]>()
+      .notNull()
+      .$defaultFn(() => []),
     referrer: text("referrer"),
-    session: jsonb("session").$type<unknown>(),
-    intentTopic: text("intent_topic"),
+    session: json("session").$type<unknown>(),
+    intentTopic: varchar("intent_topic", { length: 255 }),
     intentLevel: intentLevel("intent_level"),
-    icpScore: integer("icp_score"),
-    icpReasons: jsonb("icp_reasons").$type<IcpReason[]>(),
+    icpScore: int("icp_score"),
+    icpReasons: json("icp_reasons").$type<IcpReason[]>(),
     status: leadStatus("status").notNull().default("received"),
     skipReason: text("skip_reason"),
-    campaignId: text("campaign_id"),
+    campaignId: varchar("campaign_id", { length: 64 }),
     ...timestamps(),
   },
   (t) => [

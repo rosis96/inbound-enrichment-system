@@ -1,0 +1,57 @@
+import { describe, expect, it } from "vitest";
+import { createInstantlyLead } from "./index";
+
+const respond = (status: number, body: unknown, headers: Record<string, string> = {}) =>
+  (async () => new Response(JSON.stringify(body), { status, headers })) as unknown as typeof fetch;
+
+describe("createInstantlyLead", () => {
+  it("sends a bearer-authenticated JSON POST and returns the lead id", async () => {
+    let seen: { url: string; init: RequestInit } | undefined;
+    const fetchSpy = (async (url: string, init: RequestInit) => {
+      seen = { url, init };
+      return new Response(JSON.stringify({ id: "lead_1", email: "a@b.example" }), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const { outcome } = await createInstantlyLead("key123", { email: "a@b.example" }, { fetch: fetchSpy });
+    expect(outcome).toMatchObject({ kind: "ok", status: 200, leadId: "lead_1" });
+    expect(seen?.url).toBe("https://api.instantly.ai/api/v2/leads");
+    expect(seen?.init.method).toBe("POST");
+    expect((seen?.init.headers as Record<string, string>).authorization).toBe("Bearer key123");
+    expect(seen?.init.body).toBe('{"email":"a@b.example"}');
+  });
+
+  it("treats 401 and 402 as config errors (no retry)", async () => {
+    expect((await createInstantlyLead("k", {}, { fetch: respond(401, {}) })).outcome).toMatchObject({
+      kind: "config_error",
+      code: "instantly_unauthorized",
+    });
+    expect((await createInstantlyLead("k", {}, { fetch: respond(402, {}) })).outcome).toMatchObject({
+      kind: "config_error",
+      code: "instantly_payment_required",
+    });
+    expect((await createInstantlyLead("k", {}, { fetch: respond(400, { message: "bad" }) })).outcome).toMatchObject({
+      kind: "config_error",
+      code: "instantly_400",
+    });
+  });
+
+  it("treats 429, 5xx and network errors as transient", async () => {
+    expect((await createInstantlyLead("k", {}, { fetch: respond(429, {}, { "retry-after": "30" }) })).outcome).toMatchObject({
+      kind: "transient",
+      code: "instantly_rate_limited",
+      retryAfterSeconds: 30,
+    });
+    expect((await createInstantlyLead("k", {}, { fetch: respond(503, {}) })).outcome).toMatchObject({
+      kind: "transient",
+      code: "instantly_503",
+    });
+    const failing = (async () => {
+      throw new TypeError("fetch failed");
+    }) as unknown as typeof fetch;
+    expect((await createInstantlyLead("k", {}, { fetch: failing })).outcome).toMatchObject({
+      kind: "transient",
+      status: null,
+      code: "network_error",
+    });
+  });
+});

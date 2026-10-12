@@ -4,8 +4,8 @@ import { createLogger } from "@enrich/shared/logger";
 import { randomUUID } from "node:crypto";
 import { hostname } from "node:os";
 import { startHeartbeat } from "./heartbeat";
-import { registerAllJobs } from "./jobs";
-import { createBoss, ensureQueues } from "./queue";
+import { jobDefinitions } from "./jobs";
+import { startQueueWorker } from "./queue";
 
 loadRootEnvFile();
 
@@ -23,14 +23,8 @@ try {
 const logger = createLogger({ name: "worker", level: env.LOG_LEVEL });
 const workerId = `${hostname()}:${process.pid}:${randomUUID().slice(0, 8)}`;
 const { db, pool } = createDb(env.DATABASE_URL);
-const boss = createBoss(env.DATABASE_URL);
 
-boss.on("error", (error) => logger.error({ err: error }, "pg-boss error"));
-boss.on("warning", (warning) => logger.warn({ warning }, "pg-boss warning"));
-
-await boss.start();
-await ensureQueues(boss);
-await registerAllJobs({ db, boss, env, logger });
+const stopQueue = startQueueWorker({ db, env, logger, workerId }, jobDefinitions);
 const stopHeartbeat = startHeartbeat(db, logger, { workerId });
 
 logger.info({ workerId, dryRun: env.GLOBAL_DRY_RUN }, "worker started");
@@ -41,7 +35,8 @@ async function shutdown(signal: string): Promise<void> {
   shuttingDown = true;
   logger.info({ signal }, "worker stopping");
   stopHeartbeat();
-  await boss.stop({ graceful: true, timeout: 30_000 });
+  // Let running jobs finish, but do not hang forever.
+  await Promise.race([stopQueue(), new Promise((resolve) => setTimeout(resolve, 30_000))]);
   await pool.end();
   process.exit(0);
 }

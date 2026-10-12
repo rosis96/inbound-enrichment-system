@@ -27,7 +27,7 @@ export const IcpSettings = z.object({
   titleKeywords: stringList,
   titleExcludeKeywords: stringList,
   seniorities: z.array(Seniority).default([]),
-  minScore: z.number().int().min(0).max(100).default(50),
+  minScore: z.number().int().min(0).max(100).default(80),
 });
 
 export const PageSettings = z.object({

@@ -1,19 +1,21 @@
-import { index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
-import { id, timestamps } from "./_shared";
+import { index, mysqlTable, text } from "drizzle-orm/mysql-core";
+import { id, json, timestamps, utcDatetime, uuidRef } from "./_shared";
 import { clients } from "./clients";
 import { eventSource } from "./enums";
 
-export const rawEvents = pgTable(
+export const rawEvents = mysqlTable(
   "raw_events",
   {
     id: id(),
-    clientId: uuid("client_id")
+    clientId: uuidRef("client_id")
       .notNull()
       .references(() => clients.id, { onDelete: "cascade" }),
     source: eventSource("source").notNull(),
-    payload: jsonb("payload").$type<unknown>().notNull(),
-    receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
-    processedAt: timestamp("processed_at", { withTimezone: true }),
+    payload: json("payload").$type<unknown>().notNull(),
+    receivedAt: utcDatetime("received_at")
+      .notNull()
+      .$defaultFn(() => new Date()),
+    processedAt: utcDatetime("processed_at"),
     error: text("error"),
     ...timestamps(),
   },

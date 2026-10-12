@@ -11,7 +11,7 @@ export const demoSettings: ClientSettingsInput = {
     titleKeywords: ["owner", "founder", "director", "head of", "manager"],
     titleExcludeKeywords: ["intern", "student", "assistant"],
     seniorities: ["owner", "c_level", "director", "manager"],
-    minScore: 50,
+    minScore: 80,
   },
   pages: {
     highIntent: ["/pricing", "/contact", "/services/*"],

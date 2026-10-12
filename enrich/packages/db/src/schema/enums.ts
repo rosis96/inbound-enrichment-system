@@ -12,17 +12,18 @@ import {
   SUPPRESSION_REASONS,
   SUPPRESSION_SOURCES,
 } from "@enrich/shared";
-import { pgEnum } from "drizzle-orm/pg-core";
+import { mysqlEnum } from "drizzle-orm/mysql-core";
 
-export const clientStatus = pgEnum("client_status", CLIENT_STATUSES);
-export const eventSource = pgEnum("event_source", EVENT_SOURCES);
-export const crawlSource = pgEnum("crawl_source", CRAWL_SOURCES);
-export const intentLevel = pgEnum("intent_level", INTENT_LEVELS);
-export const leadStatus = pgEnum("lead_status", LEAD_STATUSES);
-export const emailStatus = pgEnum("email_status", EMAIL_STATUSES);
-export const outreachStatus = pgEnum("outreach_status", OUTREACH_STATUSES);
-export const stepStatus = pgEnum("step_status", STEP_STATUSES);
-export const suppressionKind = pgEnum("suppression_kind", SUPPRESSION_KINDS);
-export const suppressionReason = pgEnum("suppression_reason", SUPPRESSION_REASONS);
-export const suppressionSource = pgEnum("suppression_source", SUPPRESSION_SOURCES);
-export const promptKey = pgEnum("prompt_key", PROMPT_KEYS);
+// MySQL enums are per column, so these are column factories: `leadStatus("status")`.
+export const clientStatus = (name: string) => mysqlEnum(name, CLIENT_STATUSES);
+export const eventSource = (name: string) => mysqlEnum(name, EVENT_SOURCES);
+export const crawlSource = (name: string) => mysqlEnum(name, CRAWL_SOURCES);
+export const intentLevel = (name: string) => mysqlEnum(name, INTENT_LEVELS);
+export const leadStatus = (name: string) => mysqlEnum(name, LEAD_STATUSES);
+export const emailStatus = (name: string) => mysqlEnum(name, EMAIL_STATUSES);
+export const outreachStatus = (name: string) => mysqlEnum(name, OUTREACH_STATUSES);
+export const stepStatus = (name: string) => mysqlEnum(name, STEP_STATUSES);
+export const suppressionKind = (name: string) => mysqlEnum(name, SUPPRESSION_KINDS);
+export const suppressionReason = (name: string) => mysqlEnum(name, SUPPRESSION_REASONS);
+export const suppressionSource = (name: string) => mysqlEnum(name, SUPPRESSION_SOURCES);
+export const promptKey = (name: string) => mysqlEnum(name, PROMPT_KEYS);

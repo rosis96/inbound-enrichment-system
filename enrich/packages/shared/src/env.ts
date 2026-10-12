@@ -42,7 +42,7 @@ export const encryptionKeySchema = z.string().refine((value) => {
 
 export const EnvSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
-  DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
+  DATABASE_URL: z.url({ protocol: /^mysql$/ }),
   APP_URL: z.url().default("http://localhost:3000"),
   ADMIN_EMAILS: z
     .string()
@@ -54,6 +54,11 @@ export const EnvSchema = z.object({
         .filter(Boolean),
     ),
   BETTER_AUTH_SECRET: optionalString,
+  // Superadmin seeded by `pnpm db:seed`; the web app refuses logins until these are set.
+  ADMIN_EMAIL: optionalString.pipe(z.email().toLowerCase().optional()),
+  ADMIN_PASSWORD: optionalString.pipe(z.string().min(8, "must be at least 8 characters").optional()),
+  // HMAC key for the admin session cookie.
+  SESSION_SECRET: optionalString.pipe(z.string().min(32, "must be at least 32 characters").optional()),
   ENCRYPTION_KEY: encryptionKeySchema,
   GLOBAL_DRY_RUN: booleanFlag(true),
   ALLOW_CATCH_ALL: booleanFlag(false),

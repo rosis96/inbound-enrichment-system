@@ -16,7 +16,6 @@
     "@enrich/db": "workspace:*",
     "@enrich/providers": "workspace:*",
     "@enrich/shared": "workspace:*",
-    "pg-boss": "^12.37.1",
     "pino": "^10.4.0",
     "zod": "^4.6.5"
   },

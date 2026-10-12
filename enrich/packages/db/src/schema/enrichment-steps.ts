@@ -1,27 +1,27 @@
-import { index, integer, jsonb, numeric, pgTable, text, uuid } from "drizzle-orm/pg-core";
-import { id, timestamps } from "./_shared";
+import { decimal, index, int, mysqlTable, text, varchar } from "drizzle-orm/mysql-core";
+import { id, json, timestamps, uuidRef } from "./_shared";
 import { contacts } from "./contacts";
 import { stepStatus } from "./enums";
 import { leads } from "./leads";
 
 /** Audit trail: one row per pipeline step execution. */
-export const enrichmentSteps = pgTable(
+export const enrichmentSteps = mysqlTable(
   "enrichment_steps",
   {
     id: id(),
-    leadId: uuid("lead_id")
+    leadId: uuidRef("lead_id")
       .notNull()
       .references(() => leads.id, { onDelete: "cascade" }),
-    contactId: uuid("contact_id").references(() => contacts.id, { onDelete: "set null" }),
-    step: text("step").notNull(),
-    provider: text("provider").notNull(),
+    contactId: uuidRef("contact_id").references(() => contacts.id, { onDelete: "set null" }),
+    step: varchar("step", { length: 50 }).notNull(),
+    provider: varchar("provider", { length: 100 }).notNull(),
     status: stepStatus("status").notNull(),
-    input: jsonb("input").$type<unknown>(),
-    output: jsonb("output").$type<unknown>(),
+    input: json("input").$type<unknown>(),
+    output: json("output").$type<unknown>(),
     error: text("error"),
-    costUsd: numeric("cost_usd", { precision: 10, scale: 5, mode: "number" }).notNull().default(0),
-    durationMs: integer("duration_ms"),
-    attempt: integer("attempt").notNull().default(1),
+    costUsd: decimal("cost_usd", { precision: 10, scale: 5, mode: "number" }).notNull().default(0),
+    durationMs: int("duration_ms"),
+    attempt: int("attempt").notNull().default(1),
     ...timestamps(),
   },
   (t) => [
