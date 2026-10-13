@@ -53,6 +53,6 @@ export async function handleIcp(data: LeadJobData, ctx: JobContext): Promise<voi
     durationMs: Date.now() - started,
   });
 
-  if (result.passed) await enqueue(ctx, "personalise", data);
+  if (result.passed) await enqueue(ctx, "research", data);
   else ctx.logger.info({ score: result.score, minScore }, "below ICP threshold");
 }

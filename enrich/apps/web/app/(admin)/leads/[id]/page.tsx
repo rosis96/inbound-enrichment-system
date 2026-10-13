@@ -93,7 +93,7 @@ export default async function LeadPage({
       <div className="space-y-6">
         {reprocessed && (
           <Alert tone="info">
-            Reprocessing queued. The worker re-runs normalise → gates → ICP → personalise → push; refresh in a few seconds.
+            Reprocessing queued. The worker re-runs normalise → gates → ICP → research → personalise → push; refresh in a few seconds.
           </Alert>
         )}
         {lead.skipReason && <Alert tone={lead.status === "failed" ? "error" : "warning"}>{lead.skipReason}</Alert>}
@@ -249,6 +249,40 @@ export default async function LeadPage({
                   ["Revenue", company.revenueRange],
                 ]}
               />
+              <div className="mt-5 border-t border-slate-100 pt-4">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-xs font-medium text-slate-500">From their website</span>
+                  {company.crawledAt && (
+                    <span className="text-[11px] text-slate-400">
+                      read {company.crawledAt.toISOString().slice(0, 10)} via {company.crawlSource}
+                    </span>
+                  )}
+                </div>
+                {company.summary ? (
+                  <div className="mt-2 space-y-2 text-sm">
+                    <p className="text-slate-900">{company.summary.oneLiner}</p>
+                    <p className="text-xs text-slate-600">
+                      <span className="font-medium">Sells:</span> {company.summary.whatTheySell}
+                    </p>
+                    <p className="text-xs text-slate-600">
+                      <span className="font-medium">To:</span> {company.summary.whoTheySellTo}
+                    </p>
+                    {company.summary.personalisationHooks.length > 0 && (
+                      <ul className="list-disc space-y-1 pl-4 text-xs text-slate-600">
+                        {company.summary.personalisationHooks.map((hook) => (
+                          <li key={hook}>{hook}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ) : (
+                  <p className="mt-2 text-xs text-slate-500">
+                    {company.crawlText
+                      ? `Website read (${company.crawlText.length.toLocaleString()} characters); no AI summary yet.`
+                      : "Not researched yet."}
+                  </p>
+                )}
+              </div>
               <div className="mt-5 border-t border-slate-100 pt-4">
                 <div className="text-xs font-medium text-slate-500">Pages visited</div>
                 <ul className="mt-2 space-y-2">

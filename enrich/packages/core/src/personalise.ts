@@ -1,13 +1,23 @@
 import type { AiVariable, AiVariablesOutput, ClientSettings, CompanySummary, LeadPage } from "@enrich/shared";
 
 /** Bump when the prompt below changes meaningfully; stored with each result. */
-export const VARIABLES_PROMPT_VERSION = 1;
+export const VARIABLES_PROMPT_VERSION = 2;
+
+const WEBSITE_EXCERPT_CHARS = 2500;
 
 export interface VariablesPromptInput {
   copy: ClientSettings["copy"];
   variables: AiVariable[];
   contact: { firstName: string | null; lastName: string | null; title: string | null };
-  company: { domain: string; name: string | null; industry: string | null; country: string | null; summary: CompanySummary | null };
+  company: {
+    domain: string;
+    name: string | null;
+    industry: string | null;
+    country: string | null;
+    summary: CompanySummary | null;
+    /** Raw website text; used (trimmed) only when there is no summary. */
+    crawlText?: string | null;
+  };
   intentTopic: string | null;
   pages: LeadPage[];
 }
@@ -22,6 +32,9 @@ function companyFacts(company: VariablesPromptInput["company"]): string {
   if (summary) {
     lines.push(`What they do: ${summary.oneLiner}`, `Sells: ${summary.whatTheySell}`, `Sells to: ${summary.whoTheySellTo}`);
     if (summary.personalisationHooks.length > 0) lines.push(`Specific details: ${summary.personalisationHooks.join("; ")}`);
+    if (summary.recentNews) lines.push(`Recent news: ${summary.recentNews}`);
+  } else if (company.crawlText) {
+    lines.push(`From their website (excerpt):\n${company.crawlText.slice(0, WEBSITE_EXCERPT_CHARS)}`);
   }
   return lines.join("\n");
 }
