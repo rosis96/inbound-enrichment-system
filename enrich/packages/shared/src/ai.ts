@@ -10,8 +10,8 @@ export const CompanySummary = z.object({
 });
 export type CompanySummary = z.infer<typeof CompanySummary>;
 
-export const FirstLineOutput = z.object({
-  firstLine: z.string().min(1),
-  subjectLine: z.string().min(1),
+/** Writer reply: up to two candidates per variable name, best first. */
+export const AiVariablesOutput = z.object({
+  variables: z.record(z.string(), z.union([z.array(z.string()), z.string()])),
 });
-export type FirstLineOutput = z.infer<typeof FirstLineOutput>;
+export type AiVariablesOutput = z.infer<typeof AiVariablesOutput>;

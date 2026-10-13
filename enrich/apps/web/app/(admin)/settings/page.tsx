@@ -3,6 +3,7 @@ import { BUILTIN_INSTANTLY_VARIABLES, parseClientSettings, SENIORITIES } from "@
 import { getEnv } from "@enrich/shared/env";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { AiVariablesEditor } from "@/components/ai-variables-editor";
 import { Alert, Card, EmptyState, PageHeader } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
 import { saveSettings } from "./actions";
@@ -13,6 +14,7 @@ const SECTIONS = [
   { id: "sending", label: "Sending" },
   { id: "icp", label: "ICP" },
   { id: "copy", label: "Email copy" },
+  { id: "ai", label: "AI variables" },
   { id: "variables", label: "Custom variables" },
 ] as const;
 
@@ -198,24 +200,27 @@ export default async function SettingsPage({
             title="Email copy"
             description={
               <>
-                The email itself is written in the Instantly campaign. With AI first lines on, each lead gets a personal opener and
-                subject there as <code>{"{{firstLine}}"}</code> and <code>{"{{subjectLine}}"}</code>.
+                Context the AI uses when writing this client's variables. The email itself is written on the{" "}
+                <Link href={`/sequence?client=${client.id}`} className="text-brand-600 hover:underline">
+                  Sequence
+                </Link>{" "}
+                page.
               </>
             }
           >
             <div className="space-y-5">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <Toggle
-                  name="aiFirstLine"
-                  label="Write AI first line + subject"
+                  name="aiVariablesEnabled"
+                  label="Write AI variables for each lead"
                   hint="Needs OPENAI_API_KEY and OPENAI_MODEL in .env."
-                  defaultChecked={settings.copy.aiFirstLine}
+                  defaultChecked={settings.copy.aiVariablesEnabled}
                 />
                 <Toggle
-                  name="requireFirstLine"
-                  label="Require a first line"
-                  hint="Fail the lead instead of pushing it without one."
-                  defaultChecked={settings.copy.requireFirstLine}
+                  name="requireAiVariables"
+                  label="Require every AI variable"
+                  hint="Fail the lead instead of pushing it with one missing."
+                  defaultChecked={settings.copy.requireAiVariables}
                 />
               </div>
               <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
@@ -234,6 +239,14 @@ export default async function SettingsPage({
                 <ListField name="bannedPhrases" label="Banned phrases" values={settings.copy.bannedPhrases} />
               </div>
             </div>
+          </Card>
+
+          <Card
+            id="ai"
+            title="AI variables"
+            description="Written by AI for every lead in one request, checked against these limits, and sent to Instantly as custom variables."
+          >
+            <AiVariablesEditor name="aiVariables" initial={settings.aiVariables} />
           </Card>
 
           <Card
@@ -262,7 +275,7 @@ export default async function SettingsPage({
                   <code>{"Hi {{firstName|there}}"}</code>.
                 </p>
                 <div className="mt-3 flex flex-wrap gap-1.5">
-                  {BUILTIN_INSTANTLY_VARIABLES.map((name) => (
+                  {[...BUILTIN_INSTANTLY_VARIABLES, ...settings.aiVariables.map((v) => v.name)].map((name) => (
                     <code key={name} className="bg-white ring-1 ring-slate-200">{`{{${name}}}`}</code>
                   ))}
                 </div>

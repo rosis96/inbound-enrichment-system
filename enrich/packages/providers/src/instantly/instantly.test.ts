@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createInstantlyLead } from "./index";
+import { createInstantlyCampaign, createInstantlyLead, updateInstantlyCampaign } from "./index";
 
 const respond = (status: number, body: unknown, headers: Record<string, string> = {}) =>
   (async () => new Response(JSON.stringify(body), { status, headers })) as unknown as typeof fetch;
@@ -53,5 +53,23 @@ describe("createInstantlyLead", () => {
       status: null,
       code: "network_error",
     });
+  });
+});
+
+describe("Instantly campaigns", () => {
+  it("creates with POST and updates with PATCH on the campaign id", async () => {
+    const seen: { url: string; method?: string }[] = [];
+    const fetchSpy = (async (url: string, init: RequestInit) => {
+      seen.push({ url, method: init.method });
+      return new Response(JSON.stringify({ id: "camp_1" }), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const created = await createInstantlyCampaign("k", { name: "x" }, { fetch: fetchSpy });
+    expect(created.outcome).toMatchObject({ kind: "ok", leadId: "camp_1" });
+    await updateInstantlyCampaign("k", "camp_1", { name: "x" }, { fetch: fetchSpy });
+    expect(seen).toEqual([
+      { url: "https://api.instantly.ai/api/v2/campaigns", method: "POST" },
+      { url: "https://api.instantly.ai/api/v2/campaigns/camp_1", method: "PATCH" },
+    ]);
   });
 });

@@ -7,7 +7,7 @@ import { PayloadError, parseHappierleadsPayload } from "./happierleads";
 import { parseEmployeeRange, scoreIcp } from "./icp";
 import { buildInstantlyLead } from "./instantly";
 import { countryCode, normaliseDomain, pathMatches, urlPath } from "./normalise";
-import { buildFirstLinePrompt, checkFirstLine } from "./personalise";
+import { buildVariablesPrompt, checkVariable, pickVariables } from "./personalise";
 import { renderTemplate, templatePlaceholders } from "./template";
 
 // Mirrors the demo client's seeded settings.
@@ -209,27 +209,35 @@ describe("buildInstantlyLead", () => {
 describe("buildInstantlyLead custom variables", () => {
   const base = {
     campaignId: null,
-    contact: { email: "a@b.example", firstName: null, lastName: null, title: null, firstLine: "Loved the new pricing page.", subjectLine: "Quick idea" },
+    contact: {
+      email: "a@b.example",
+      firstName: null,
+      lastName: null,
+      title: null,
+      aiVariables: { personalized_first_line: "Loved the new pricing page.", subject_line: "quick idea" },
+    },
     company: { domain: "b.example", name: "Bee", industry: null, country: null },
     lead: { id: "l1", icpScore: 90, intentLevel: null, intentTopic: "SEO", pages: [] },
   };
 
-  it("sends the first line, subject and rendered custom variables", () => {
+  it("sends AI variables and rendered custom variables", () => {
     const body = buildInstantlyLead({
       ...base,
       customVariables: [
         { name: "calendarLink", value: "https://cal.com/sam" },
         { name: "greeting", value: "Hi {{firstName|there}}" },
         { name: "pitch", value: "{{intentTopic}} help for {{companyName}}" },
+        { name: "opener", value: "{{personalized_first_line}}" },
         { name: "empty", value: "{{industry}}" },
       ],
     });
     expect(body.custom_variables).toMatchObject({
-      firstLine: "Loved the new pricing page.",
-      subjectLine: "Quick idea",
+      personalized_first_line: "Loved the new pricing page.",
+      subject_line: "quick idea",
       calendarLink: "https://cal.com/sam",
       greeting: "Hi there",
       pitch: "SEO help for Bee",
+      opener: "Loved the new pricing page.",
     });
     expect(body.custom_variables.empty).toBeUndefined();
   });
@@ -242,26 +250,44 @@ describe("renderTemplate", () => {
   });
 });
 
-describe("checkFirstLine", () => {
-  it("passes a clean line and flags guardrail problems", () => {
-    expect(checkFirstLine({ firstLine: "Your ops team clearly ships fast.", subjectLine: "Ops idea" }, [])).toEqual([]);
-    const problems = checkFirstLine(
-      { firstLine: "I saw you visited our site, {name}. Let's circle back.", subjectLine: "x".repeat(61) },
-      ["circle back"],
-    );
+const firstLine = { name: "personalized_first_line", instructions: "x", minWords: 4, maxWords: 12, examples: [] };
+const subject = { name: "subject_line", instructions: "x", minWords: 1, maxWords: 6, maxChars: 30, examples: [] };
+
+describe("checkVariable", () => {
+  it("passes a clean value and flags guardrail problems", () => {
+    expect(checkVariable(firstLine, "Your ops team clearly ships fast.", [])).toEqual([]);
+    const problems = checkVariable(firstLine, "I saw you visited our site, {name}. Let's circle back now please okay", ["circle back"]);
     expect(problems).toHaveLength(4);
+    expect(checkVariable(subject, "a subject that is far too long for it", [])).toHaveLength(2);
   });
 });
 
-describe("buildFirstLinePrompt", () => {
-  it("fills copy, contact and a name + industry summary when research has not run", () => {
+describe("pickVariables", () => {
+  it("keeps the first passing candidate and reports the rest", () => {
+    const picked = pickVariables(
+      [firstLine, subject],
+      { variables: { personalized_first_line: ["too short", "Your ops team clearly ships fast."], subject_line: "[x]" } },
+      [],
+    );
+    expect(picked.values).toEqual({ personalized_first_line: "Your ops team clearly ships fast." });
+    expect(Object.keys(picked.rejected)).toEqual(["subject_line"]);
+  });
+});
+
+describe("buildVariablesPrompt", () => {
+  it("lists every variable with its limits and the company facts", () => {
     const settings = parseClientSettings({ copy: { senderName: "Sam", bannedPhrases: ["synergy"] } });
-    const prompt = buildFirstLinePrompt("{{senderName}}|{{firstName}}|{{companySummary}}|{{bannedPhrases}}|{{intentTopic}}", {
+    const prompt = buildVariablesPrompt({
       copy: settings.copy,
-      contact: { firstName: null, title: null },
-      company: { domain: "b.example", name: "Bee", industry: "Software", summary: null },
+      variables: settings.aiVariables,
+      contact: { firstName: "Priya", lastName: null, title: "Founder" },
+      company: { domain: "b.example", name: "Bee", industry: "Software", country: "GB", summary: null },
       intentTopic: null,
+      pages: [],
     });
-    expect(prompt).toBe("Sam|there|Bee, a company in Software|synergy|general");
+    expect(prompt).toContain("- subject_line (2-7 words, at most 60 characters)");
+    expect(prompt).toContain("- personalized_first_line (8-25 words)");
+    expect(prompt).toContain("Industry: Software");
+    expect(prompt).toContain("Never use these phrases: synergy");
   });
 });

@@ -58,13 +58,18 @@ export const CopySettings = z.object({
   offer: z.string().default(""),
   bannedPhrases: stringList,
   tone: z.string().default("friendly, concise, professional"),
-  // AI first line + subject, sent to Instantly as {{firstLine}} / {{subjectLine}}.
-  aiFirstLine: z.boolean().default(true),
-  // When true, a lead whose first line could not be written fails instead of being pushed without one.
-  requireFirstLine: z.boolean().default(false),
+  // Writes the client's AI variables for every lead before it is pushed.
+  aiVariablesEnabled: z.boolean().default(true),
+  // When true, a lead missing any AI variable fails instead of being pushed without it.
+  requireAiVariables: z.boolean().default(false),
 });
 
-/** Variables the push step always sets; custom variables cannot reuse these names. */
+const variableName = z
+  .string()
+  .trim()
+  .regex(/^[A-Za-z][A-Za-z0-9_]{0,49}$/, "must start with a letter and use only letters, digits and _ (max 50)");
+
+/** Variables the push step always sets from lead data; other variables cannot reuse these names. */
 export const BUILTIN_INSTANTLY_VARIABLES = [
   "email",
   "firstName",
@@ -79,55 +84,146 @@ export const BUILTIN_INSTANTLY_VARIABLES = [
   "intentTopic",
   "pagesVisited",
   "enrichLeadId",
-  "firstLine",
-  "subjectLine",
 ] as const;
 
+/** Placeholders Instantly fills itself (lead fields and sending account), usable in sequences. */
+export const INSTANTLY_SYSTEM_PLACEHOLDERS = [
+  "firstName",
+  "lastName",
+  "email",
+  "companyName",
+  "website",
+  "phone",
+  "personalization",
+  "sendingAccountFirstName",
+  "accountSignature",
+] as const;
+
+/** One AI-written variable, e.g. `personalized_first_line`, sent to Instantly as a custom variable. */
+export const AiVariable = z
+  .object({
+    name: variableName,
+    instructions: z.string().trim().min(1).max(2000),
+    minWords: z.number().int().min(1).max(200).default(5),
+    maxWords: z.number().int().min(1).max(200).default(25),
+    // Hard character cap, e.g. 60 for subject lines.
+    maxChars: z.number().int().min(10).max(1000).optional(),
+    examples: z.array(z.string().trim().min(1)).max(10).default([]),
+  })
+  .refine((v) => v.minWords <= v.maxWords, { message: "min words must be at most max words", path: ["minWords"] });
+export type AiVariable = z.output<typeof AiVariable>;
+
+export const DEFAULT_AI_VARIABLES: z.input<typeof AiVariable>[] = [
+  {
+    name: "subject_line",
+    instructions: "A short, curious subject line about the prospect's company or role. Lowercase is fine. No clickbait, no emojis.",
+    minWords: 2,
+    maxWords: 7,
+    maxChars: 60,
+    examples: [],
+  },
+  {
+    name: "personalized_first_line",
+    instructions:
+      "The opening line of the email: one specific, factual observation about the prospect's company or role that leads naturally into the offer.",
+    minWords: 8,
+    maxWords: 25,
+    examples: [],
+  },
+];
+
 export const CustomVariable = z.object({
-  name: z
-    .string()
-    .trim()
-    .regex(/^[A-Za-z][A-Za-z0-9_]{0,49}$/, "must start with a letter and use only letters, digits and _ (max 50)"),
+  name: variableName,
   // Static text or a template: {{firstName}}, {{companyName|your team}} (text after | is the fallback).
   value: z.string().trim().min(1).max(2000),
 });
 export type CustomVariable = z.infer<typeof CustomVariable>;
 
+export const SequenceVariant = z.object({
+  // Follow-up steps may leave the subject empty to reply in the same thread.
+  subject: z.string().trim().max(500).default(""),
+  body: z.string().trim().min(1, "body is required").max(20_000),
+});
+export type SequenceVariant = z.infer<typeof SequenceVariant>;
+
+export const SequenceStep = z.object({
+  // Days to wait after the previous step; ignored for the first step.
+  waitDays: z.number().int().min(0).max(90).default(3),
+  variants: z.array(SequenceVariant).min(1).max(5),
+});
+export type SequenceStep = z.infer<typeof SequenceStep>;
+
+export const SequenceSettings = z.object({
+  steps: z.array(SequenceStep).max(10).default([]),
+  // Last time the sequence was created in or pushed to Instantly.
+  lastSync: z.object({ at: z.string(), campaignId: z.string() }).optional(),
+});
+
+const timeOfDay = z.string().regex(/^([01][0-9]|2[0-3]):[0-5][0-9]$/, "must be HH:mm");
+
+/** Used when creating or updating the Instantly campaign from the sequence. */
+export const InstantlyCampaignSetup = z.object({
+  name: z.string().trim().max(255).default(""),
+  // IANA name; Instantly accepts only its own list, so its error is shown if this one is rejected.
+  timezone: z.string().trim().min(1).default("America/Chicago"),
+  from: timeOfDay.default("09:00"),
+  to: timeOfDay.default("17:00"),
+  // 0 = Sunday … 6 = Saturday.
+  days: z.array(z.number().int().min(0).max(6)).default([1, 2, 3, 4, 5]),
+  sendingAccounts: z.array(z.email()).default([]),
+  dailyLimit: z.number().int().min(1).max(10_000).optional(),
+  stopOnReply: z.boolean().default(true),
+});
+
 const reserved = new Set(BUILTIN_INSTANTLY_VARIABLES.map((name) => name.toLowerCase()));
 
-export const CustomVariables = z
-  .array(CustomVariable)
-  .max(30)
-  .default([])
-  .superRefine((variables, ctx) => {
-    const seen = new Set<string>();
-    variables.forEach((variable, index) => {
-      const key = variable.name.toLowerCase();
-      if (reserved.has(key)) {
-        ctx.addIssue({ code: "custom", path: [index, "name"], message: `"${variable.name}" is a built-in variable` });
-      } else if (seen.has(key)) {
-        ctx.addIssue({ code: "custom", path: [index, "name"], message: `"${variable.name}" is defined twice` });
-      }
-      seen.add(key);
-    });
+export const ClientSettings = z
+  .object({
+    icp: IcpSettings.prefault({}),
+    pages: PageSettings.prefault({}),
+    contacts: ContactSettings.prefault({}),
+    dedupeDays: z.number().int().min(0).max(3650).default(60),
+    freeEmailDomains: z.array(z.string().trim().toLowerCase().min(1)).default(DEFAULT_FREE_EMAIL_DOMAINS),
+    // Client's own domains: leads from these are gated out.
+    ownDomains: z.array(z.string().trim().toLowerCase().min(1)).default([]),
+    campaigns: CampaignSettings.prefault({}),
+    copy: CopySettings.prefault({}),
+    aiVariables: z.array(AiVariable).max(10).default(DEFAULT_AI_VARIABLES as z.output<typeof AiVariable>[]),
+    customVariables: z.array(CustomVariable).max(30).default([]),
+    sequence: SequenceSettings.prefault({}),
+    campaignSetup: InstantlyCampaignSetup.prefault({}),
+  })
+  .superRefine((settings, ctx) => {
+    // AI and custom variables share one namespace in Instantly.
+    const seen = new Map<string, string>();
+    const check = (list: "aiVariables" | "customVariables", names: string[]) => {
+      names.forEach((name, index) => {
+        const key = name.toLowerCase();
+        const path = [list, index, "name"];
+        if (reserved.has(key)) ctx.addIssue({ code: "custom", path, message: `"${name}" is a built-in variable` });
+        else if (seen.has(key)) ctx.addIssue({ code: "custom", path, message: `"${name}" is already used by ${seen.get(key)}` });
+        seen.set(key, list === "aiVariables" ? "an AI variable" : "a custom variable");
+      });
+    };
+    check("aiVariables", settings.aiVariables.map((v) => v.name));
+    check("customVariables", settings.customVariables.map((v) => v.name));
   });
-
-export const ClientSettings = z.object({
-  icp: IcpSettings.prefault({}),
-  pages: PageSettings.prefault({}),
-  contacts: ContactSettings.prefault({}),
-  dedupeDays: z.number().int().min(0).max(3650).default(60),
-  freeEmailDomains: z.array(z.string().trim().toLowerCase().min(1)).default(DEFAULT_FREE_EMAIL_DOMAINS),
-  // Client's own domains: leads from these are gated out.
-  ownDomains: z.array(z.string().trim().toLowerCase().min(1)).default([]),
-  campaigns: CampaignSettings.prefault({}),
-  copy: CopySettings.prefault({}),
-  customVariables: CustomVariables,
-});
 
 export type ClientSettings = z.output<typeof ClientSettings>;
 export type ClientSettingsInput = z.input<typeof ClientSettings>;
 
 export function parseClientSettings(value: unknown): ClientSettings {
   return ClientSettings.parse(value ?? {});
+}
+
+/** Every variable a sequence can reference for this client. */
+export function knownPlaceholders(settings: ClientSettings): string[] {
+  return [
+    ...new Set([
+      ...INSTANTLY_SYSTEM_PLACEHOLDERS,
+      ...BUILTIN_INSTANTLY_VARIABLES,
+      ...settings.aiVariables.map((v) => v.name),
+      ...settings.customVariables.map((v) => v.name),
+    ]),
+  ];
 }

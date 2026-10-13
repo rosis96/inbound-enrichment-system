@@ -29,6 +29,8 @@ export const contacts = mysqlTable(
     firstLine: text("first_line"),
     subjectLine: varchar("subject_line", { length: 255 }),
     personalisationMeta: json("personalisation_meta").$type<PersonalisationMeta>(),
+    // AI variables by name, e.g. { personalized_first_line: "..." }; replaces first_line / subject_line.
+    aiVariables: json("ai_variables").$type<Record<string, string>>(),
     instantlyLeadId: varchar("instantly_lead_id", { length: 64 }),
     outreachStatus: outreachStatus("outreach_status").notNull().default("not_sent"),
     ...timestamps(),

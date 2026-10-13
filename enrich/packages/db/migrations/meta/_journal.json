@@ -8,6 +8,13 @@
       "when": 1791720686918,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1791889963088,
+      "tag": "0001_contact_ai_variables",
+      "breakpoints": true
     }
   ]
 }

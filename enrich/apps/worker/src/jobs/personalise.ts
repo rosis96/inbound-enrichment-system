@@ -1,13 +1,13 @@
-import { buildFirstLinePrompt, checkFirstLine } from "@enrich/core";
-import { and, contacts, desc, eq, isNotNull, leads, prompts } from "@enrich/db";
+import { buildVariablesPrompt, pickVariables, VARIABLES_PROMPT_VERSION } from "@enrich/core";
+import { and, contacts, eq, isNotNull, leads } from "@enrich/db";
 import { completeJson } from "@enrich/providers";
-import { FirstLineOutput, LeadJobData, parseClientSettings, QUEUE_RETRY } from "@enrich/shared";
+import { AiVariablesOutput, LeadJobData, parseClientSettings, QUEUE_RETRY } from "@enrich/shared";
 import type { JobContext } from "../context";
 import { enqueue, loadLead, recordStep } from "../pipeline";
 
 export const schema = LeadJobData;
 
-/** Writes the AI first line + subject for the selected contact, then hands over to push. */
+/** Writes the client's AI variables for the selected contact, then hands over to push. */
 export async function handlePersonalise(data: LeadJobData, ctx: JobContext): Promise<void> {
   const row = await loadLead(ctx.db, data.leadId);
   if (!row) {
@@ -16,7 +16,7 @@ export async function handlePersonalise(data: LeadJobData, ctx: JobContext): Pro
   }
   const { lead, client, company } = row;
   const settings = parseClientSettings(client.settings);
-  const { copy } = settings;
+  const { copy, aiVariables } = settings;
 
   const [contact] = await ctx.db
     .select()
@@ -26,42 +26,43 @@ export async function handlePersonalise(data: LeadJobData, ctx: JobContext): Pro
   // Push records `no_contact` itself.
   if (!contact) return enqueue(ctx, "push", data);
 
-  /** Ends the step without a line: push anyway, or fail the lead when the client requires one. */
-  const withoutLine = async (status: "skipped" | "failed", reason: string, extra: { input?: unknown; output?: unknown } = {}) => {
+  const required = copy.requireAiVariables && copy.aiVariablesEnabled && aiVariables.length > 0;
+
+  /** Ends the step with some or no variables: push anyway, or fail the lead when the client requires all of them. */
+  const finish = async (
+    status: "ok" | "skipped" | "failed",
+    reason: string | null,
+    extra: { input?: unknown; output?: unknown; durationMs?: number; costUsd?: number } = {},
+  ) => {
     await recordStep(ctx, { leadId: lead.id, contactId: contact.id, step: "personalise", provider: "openai", status, error: reason, ...extra });
-    if (copy.requireFirstLine && copy.aiFirstLine) {
-      await ctx.db.update(leads).set({ status: "failed", skipReason: `no first line: ${reason}` }).where(eq(leads.id, lead.id));
-      ctx.logger.warn({ reason }, "first line required but missing, lead failed");
+    if (reason && required) {
+      await ctx.db.update(leads).set({ status: "failed", skipReason: `AI variables missing: ${reason}` }).where(eq(leads.id, lead.id));
+      ctx.logger.warn({ reason }, "AI variables required but missing, lead failed");
       return;
     }
     await enqueue(ctx, "push", data);
   };
 
-  if (!copy.aiFirstLine) return withoutLine("skipped", "disabled_for_client");
-  if (!ctx.env.OPENAI_API_KEY) return withoutLine("skipped", "no_openai_api_key");
+  if (!copy.aiVariablesEnabled) return finish("skipped", null, { output: { note: "disabled for client" } });
+  if (aiVariables.length === 0) return finish("skipped", null, { output: { note: "no AI variables configured" } });
+  if (!ctx.env.OPENAI_API_KEY) return finish("skipped", "no_openai_api_key");
+  const model = ctx.env.OPENAI_MODEL;
+  if (!model) return finish("skipped", "no_openai_model");
 
-  const [prompt] = await ctx.db
-    .select()
-    .from(prompts)
-    .where(and(eq(prompts.key, "first_line"), eq(prompts.active, true)))
-    .orderBy(desc(prompts.version))
-    .limit(1);
-  if (!prompt) return withoutLine("skipped", "no_active_first_line_prompt");
-  const model = prompt.model ?? ctx.env.OPENAI_MODEL;
-  if (!model) return withoutLine("skipped", "no_openai_model");
-
-  const text = buildFirstLinePrompt(prompt.template, {
+  const prompt = buildVariablesPrompt({
     copy,
+    variables: aiVariables,
     contact,
     company,
     intentTopic: lead.intentTopic,
+    pages: lead.pages,
   });
-  const input = { model, promptVersion: prompt.version, prompt: text };
-  const { outcome, durationMs } = await completeJson(ctx.env.OPENAI_API_KEY, model, text);
+  const input = { model, promptVersion: VARIABLES_PROMPT_VERSION, variables: aiVariables.map((v) => v.name), prompt };
+  const { outcome, durationMs } = await completeJson(ctx.env.OPENAI_API_KEY, model, prompt);
 
   if (outcome.kind === "transient") {
-    const finalAttempt = ctx.attempt > QUEUE_RETRY.retryLimit;
-    if (finalAttempt) return withoutLine("failed", outcome.code, { input, output: { status: outcome.status, body: outcome.body } });
+    const output = { status: outcome.status, body: outcome.body };
+    if (ctx.attempt > QUEUE_RETRY.retryLimit) return finish("failed", outcome.code, { input, output, durationMs });
     await recordStep(ctx, {
       leadId: lead.id,
       contactId: contact.id,
@@ -69,7 +70,7 @@ export async function handlePersonalise(data: LeadJobData, ctx: JobContext): Pro
       provider: "openai",
       status: "failed",
       input,
-      output: { status: outcome.status, body: outcome.body, willRetry: true },
+      output: { ...output, willRetry: true },
       error: outcome.code,
       durationMs,
     });
@@ -77,37 +78,31 @@ export async function handlePersonalise(data: LeadJobData, ctx: JobContext): Pro
   }
   if (outcome.kind === "config_error") {
     ctx.logger.error({ code: outcome.code, status: outcome.status }, "OpenAI rejected the request");
-    return withoutLine("failed", outcome.code, { input, output: { status: outcome.status, body: outcome.body } });
+    return finish("failed", outcome.code, { input, output: { status: outcome.status, body: outcome.body }, durationMs });
   }
 
   const { inputTokens, outputTokens } = outcome.usage;
   const costUsd =
     ((ctx.env.LLM_PRICE_INPUT_PER_1M ?? 0) * inputTokens + (ctx.env.LLM_PRICE_OUTPUT_PER_1M ?? 0) * outputTokens) / 1_000_000;
-  const parsed = FirstLineOutput.safeParse(outcome.json);
-  const problems = parsed.success ? checkFirstLine(parsed.data, copy.bannedPhrases) : ["reply does not match {firstLine, subjectLine}"];
-  if (!parsed.success || problems.length > 0) {
-    return withoutLine("failed", `guardrails: ${problems.join("; ")}`, { input, output: { json: outcome.json, problems } });
+  const parsed = AiVariablesOutput.safeParse(outcome.json);
+  if (!parsed.success) {
+    return finish("failed", "reply does not match {variables: {...}}", { input, output: { json: outcome.json }, durationMs, costUsd });
   }
 
-  const firstLine = parsed.data.firstLine.trim();
-  const subjectLine = parsed.data.subjectLine.trim();
-  await ctx.db.transaction(async (tx) => {
-    await tx
-      .update(contacts)
-      .set({ firstLine, subjectLine, personalisationMeta: { promptVersion: prompt.version, model: outcome.model } })
-      .where(eq(contacts.id, contact.id));
-    await tx.update(leads).set({ status: "personalised", skipReason: null }).where(eq(leads.id, lead.id));
-  });
-  await recordStep(ctx, {
-    leadId: lead.id,
-    contactId: contact.id,
-    step: "personalise",
-    provider: "openai",
-    status: "ok",
-    input,
-    output: { firstLine, subjectLine, model: outcome.model, usage: outcome.usage },
-    durationMs,
-    costUsd,
-  });
-  await enqueue(ctx, "push", data);
+  const { values, rejected } = pickVariables(aiVariables, parsed.data, copy.bannedPhrases);
+  const written = Object.keys(values).length;
+  if (written > 0) {
+    await ctx.db.transaction(async (tx) => {
+      await tx
+        .update(contacts)
+        .set({ aiVariables: values, personalisationMeta: { promptVersion: VARIABLES_PROMPT_VERSION, model: outcome.model } })
+        .where(eq(contacts.id, contact.id));
+      await tx.update(leads).set({ status: "personalised", skipReason: null }).where(eq(leads.id, lead.id));
+    });
+  }
+
+  const missing = Object.keys(rejected);
+  const output = { values, rejected, model: outcome.model, usage: outcome.usage };
+  if (missing.length === 0) return finish("ok", null, { input, output, durationMs, costUsd });
+  return finish(written > 0 ? "ok" : "failed", `guardrails rejected ${missing.join(", ")}`, { input, output, durationMs, costUsd });
 }

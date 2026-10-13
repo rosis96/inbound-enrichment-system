@@ -28,6 +28,20 @@ function customVariables(formData: FormData): { name: string; value: string }[] 
     });
 }
 
+/** AI variables arrive as JSON from the editor; blank example lines are dropped. */
+function aiVariables(formData: FormData): unknown {
+  try {
+    const parsed: unknown = JSON.parse(String(formData.get("aiVariables") ?? "[]"));
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((v: { examples?: unknown }) => ({
+      ...v,
+      examples: Array.isArray(v.examples) ? v.examples.map((e) => String(e).trim()).filter(Boolean) : [],
+    }));
+  } catch {
+    return [];
+  }
+}
+
 const text = (formData: FormData, name: string) => String(formData.get(name) ?? "").trim();
 
 export async function saveSettings(formData: FormData): Promise<void> {
@@ -58,14 +72,15 @@ export async function saveSettings(formData: FormData): Promise<void> {
     campaigns: { ...existing.campaigns, default: text(formData, "campaignDefault") },
     copy: {
       ...existing.copy,
-      aiFirstLine: formData.get("aiFirstLine") === "on",
-      requireFirstLine: formData.get("requireFirstLine") === "on",
+      aiVariablesEnabled: formData.get("aiVariablesEnabled") === "on",
+      requireAiVariables: formData.get("requireAiVariables") === "on",
       senderName: text(formData, "senderName"),
       tone: text(formData, "tone") || existing.copy.tone,
       companyDescription: text(formData, "companyDescription"),
       offer: text(formData, "offer"),
       bannedPhrases: list(formData, "bannedPhrases"),
     },
+    aiVariables: aiVariables(formData),
     customVariables: customVariables(formData),
   });
   if (!parsed.success) {
@@ -74,6 +89,9 @@ export async function saveSettings(formData: FormData): Promise<void> {
         // customVariables.2.name → "custom variable line 3"
         if (issue.path[0] === "customVariables" && typeof issue.path[1] === "number") {
           return `custom variable line ${issue.path[1] + 1}: ${issue.message}`;
+        }
+        if (issue.path[0] === "aiVariables" && typeof issue.path[1] === "number") {
+          return `AI variable ${issue.path[1] + 1} ${String(issue.path[2] ?? "")}: ${issue.message}`;
         }
         return `${issue.path.join(".")}: ${issue.message}`;
       })

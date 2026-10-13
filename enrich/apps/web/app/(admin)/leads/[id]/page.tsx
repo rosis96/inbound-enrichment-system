@@ -125,26 +125,25 @@ export default async function LeadPage({
 
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
           <div className="min-w-0 space-y-6 xl:col-span-2">
-            <Card title="Email personalisation" description="Sent to Instantly as {{subjectLine}} and {{firstLine}}.">
-              {selected?.firstLine ? (
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                  <div className="flex items-center gap-2 border-b border-slate-200 pb-3 text-sm">
-                    <Icon name="mail" className="size-4 text-slate-400" />
-                    <span className="text-slate-500">To</span>
-                    <span className="truncate text-slate-900">{selected.email}</span>
-                  </div>
-                  <div className="pt-3 text-sm font-semibold text-slate-900">{selected.subjectLine}</div>
-                  <p className="mt-2 text-sm text-slate-700">{selected.firstLine}</p>
+            <Card title="AI variables" description="Sent to Instantly as custom variables.">
+              {selected?.aiVariables && Object.keys(selected.aiVariables).length > 0 ? (
+                <dl className="space-y-3">
+                  {Object.entries(selected.aiVariables).map(([name, value]) => (
+                    <div key={name} className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                      <dt className="font-mono text-xs text-slate-500">{`{{${name}}}`}</dt>
+                      <dd className="mt-1 text-sm text-slate-800">{value}</dd>
+                    </div>
+                  ))}
                   {selected.personalisationMeta && (
-                    <p className="mt-3 text-xs text-slate-500">
+                    <p className="text-xs text-slate-500">
                       {selected.personalisationMeta.model} · prompt v{selected.personalisationMeta.promptVersion}
                     </p>
                   )}
-                </div>
-              ) : (
-                <p className="text-sm text-slate-500">
-                  No first line{lastPersonalise?.error ? `: ${lastPersonalise.error}` : lastPersonalise ? "" : " (step has not run)"}.
-                </p>
+                </dl>
+              ) : null}
+              {lastPersonalise?.error && <p className="mt-3 text-sm text-amber-700">{lastPersonalise.error}</p>}
+              {!selected?.aiVariables && !lastPersonalise?.error && (
+                <p className="text-sm text-slate-500">{lastPersonalise ? "None written." : "The personalise step has not run."}</p>
               )}
             </Card>
 

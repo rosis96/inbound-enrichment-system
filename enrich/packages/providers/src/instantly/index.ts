@@ -1,7 +1,9 @@
-export const INSTANTLY_LEADS_URL = "https://api.instantly.ai/api/v2/leads";
+export const INSTANTLY_API = "https://api.instantly.ai/api/v2";
+export const INSTANTLY_LEADS_URL = `${INSTANTLY_API}/leads`;
+export const INSTANTLY_CAMPAIGNS_URL = `${INSTANTLY_API}/campaigns`;
 
 export type InstantlyOutcome =
-  /** 2xx: lead created (or skipped by `skip_if_in_workspace`). */
+  /** 2xx: lead or campaign created/updated (a lead may be skipped by `skip_if_in_workspace`). */
   | { kind: "ok"; status: number; body: unknown; leadId: string | null }
   /** 401 / 402 / other 4xx: retrying will not help until someone fixes config or billing. */
   | { kind: "config_error"; status: number; body: unknown; code: string }
@@ -31,18 +33,36 @@ function retryAfter(response: Response): number | null {
   return Number.isNaN(date) ? null : Math.max(0, Math.round((date - Date.now()) / 1000));
 }
 
+type RequestOptions = { fetch?: typeof fetch; timeoutMs?: number };
+
 /** POST /api/v2/leads. Never throws; classifies the result instead. */
-export async function createInstantlyLead(
+export function createInstantlyLead(apiKey: string, body: unknown, options: RequestOptions = {}): Promise<InstantlyResponse> {
+  return instantlyRequest("POST", INSTANTLY_LEADS_URL, apiKey, body, options);
+}
+
+/** POST /api/v2/campaigns: creates a paused campaign. `leadId` in the outcome is the new campaign id. */
+export function createInstantlyCampaign(apiKey: string, body: unknown, options: RequestOptions = {}): Promise<InstantlyResponse> {
+  return instantlyRequest("POST", INSTANTLY_CAMPAIGNS_URL, apiKey, body, options);
+}
+
+/** PATCH /api/v2/campaigns/:id, e.g. to replace the sequence and schedule. */
+export function updateInstantlyCampaign(apiKey: string, campaignId: string, body: unknown, options: RequestOptions = {}): Promise<InstantlyResponse> {
+  return instantlyRequest("PATCH", `${INSTANTLY_CAMPAIGNS_URL}/${encodeURIComponent(campaignId)}`, apiKey, body, options);
+}
+
+async function instantlyRequest(
+  method: "POST" | "PATCH",
+  url: string,
   apiKey: string,
   body: unknown,
-  options: { fetch?: typeof fetch; timeoutMs?: number } = {},
+  options: RequestOptions,
 ): Promise<InstantlyResponse> {
   const started = Date.now();
   const doFetch = options.fetch ?? fetch;
   let response: Response;
   try {
-    response = await doFetch(INSTANTLY_LEADS_URL, {
-      method: "POST",
+    response = await doFetch(url, {
+      method,
       headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(options.timeoutMs ?? 20_000),
@@ -60,7 +80,7 @@ export async function createInstantlyLead(
   const { status } = response;
 
   if (response.ok) {
-    // ASSUMPTION: the created lead is returned as an object with an `id`.
+    // ASSUMPTION: the created lead or campaign is returned as an object with an `id`.
     const id =
       typeof responseBody === "object" && responseBody !== null && "id" in responseBody && typeof responseBody.id === "string"
         ? responseBody.id

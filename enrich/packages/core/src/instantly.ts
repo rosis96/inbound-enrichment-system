@@ -20,8 +20,8 @@ export interface InstantlyLeadInput {
     firstName: string | null;
     lastName: string | null;
     title: string | null;
-    firstLine?: string | null;
-    subjectLine?: string | null;
+    /** AI variables written by the personalise step, by name. */
+    aiVariables?: Record<string, string> | null;
   };
   company: { domain: string; name: string | null; industry: string | null; country: string | null };
   lead: { id: string; icpScore: number | null; intentLevel: IntentLevel | null; intentTopic: string | null; pages: LeadPage[] };
@@ -57,10 +57,10 @@ export function buildInstantlyLead({
     intentTopic: lead.intentTopic,
     pagesVisited,
     enrichLeadId: lead.id,
-    firstLine: contact.firstLine,
-    subjectLine: contact.subjectLine,
   });
+  const ai = stringsOnly(contact.aiVariables ?? {});
   const templateValues = {
+    ...ai,
     ...builtins,
     email: contact.email,
     firstName: contact.firstName,
@@ -79,6 +79,6 @@ export function buildInstantlyLead({
     ...(company.name ? { company_name: company.name } : {}),
     website: company.domain,
     skip_if_in_workspace: true,
-    custom_variables: { ...custom, ...builtins },
+    custom_variables: { ...custom, ...ai, ...builtins },
   };
 }
