@@ -1,19 +1,27 @@
 import { asc, clients, getDb } from "@enrich/db";
-import { parseClientSettings, SENIORITIES } from "@enrich/shared";
+import { BUILTIN_INSTANTLY_VARIABLES, parseClientSettings, SENIORITIES } from "@enrich/shared";
 import { getEnv } from "@enrich/shared/env";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { Alert, Card, EmptyState, PageHeader } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
 import { saveSettings } from "./actions";
 
 export const dynamic = "force-dynamic";
+
+const SECTIONS = [
+  { id: "sending", label: "Sending" },
+  { id: "icp", label: "ICP" },
+  { id: "copy", label: "Email copy" },
+  { id: "variables", label: "Custom variables" },
+] as const;
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
     <label className="block text-sm">
       <span className="font-medium text-slate-700">{label}</span>
       {hint && <span className="ml-2 text-xs text-slate-500">{hint}</span>}
-      <div className="mt-1">{children}</div>
+      <div className="mt-1.5">{children}</div>
     </label>
   );
 }
@@ -23,6 +31,23 @@ function ListField({ name, label, values, hint }: { name: string; label: string;
     <Field label={label} hint={hint ?? "one per line"}>
       <textarea name={name} defaultValue={values.join("\n")} rows={Math.max(3, values.length + 1)} className="input font-mono" />
     </Field>
+  );
+}
+
+/** Checkbox styled as a switch; still a plain form field. */
+function Toggle({ name, label, hint, defaultChecked }: { name: string; label: string; hint?: string; defaultChecked: boolean }) {
+  return (
+    <label className="flex cursor-pointer items-start gap-3">
+      <span className="relative mt-0.5 inline-flex shrink-0">
+        <input type="checkbox" name={name} defaultChecked={defaultChecked} className="peer sr-only" />
+        <span className="h-5 w-9 rounded-full bg-slate-300 transition peer-checked:bg-brand-600 peer-focus-visible:ring-2 peer-focus-visible:ring-brand-500 peer-focus-visible:ring-offset-2" />
+        <span className="absolute top-0.5 left-0.5 size-4 rounded-full bg-white shadow-sm transition peer-checked:translate-x-4" />
+      </span>
+      <span className="text-sm">
+        <span className="font-medium text-slate-900">{label}</span>
+        {hint && <span className="block text-xs text-slate-500">{hint}</span>}
+      </span>
+    </label>
   );
 }
 
@@ -37,9 +62,18 @@ export default async function SettingsPage({
   const client = allClients.find((c) => c.id === params.client) ?? allClients[0];
   if (!client) {
     return (
-      <p className="text-sm text-slate-500">
-        No clients yet. Add one on the <Link href="/clients" className="underline">Clients</Link> page.
-      </p>
+      <>
+        <PageHeader title="Settings" />
+        <div className="card">
+          <EmptyState title="No clients yet">
+            Add one on the{" "}
+            <Link href="/clients" className="text-brand-600 hover:underline">
+              Clients
+            </Link>{" "}
+            page.
+          </EmptyState>
+        </div>
+      </>
     );
   }
 
@@ -47,103 +81,203 @@ export default async function SettingsPage({
   const globalDryRun = getEnv().GLOBAL_DRY_RUN;
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="mr-2 text-xl font-semibold">Settings</h1>
-        {allClients.map((c) => (
-          <Link
-            key={c.id}
-            href={`/settings?client=${c.id}`}
-            className={`rounded px-2 py-1 text-xs ${c.id === client.id ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-600"}`}
-          >
-            {c.name}
-          </Link>
-        ))}
+    <>
+      <PageHeader title="Settings" description={`Configuration for ${client.name}. Changes apply to new leads.`} />
+
+      {allClients.length > 1 && (
+        <div className="mb-6 flex flex-wrap gap-1.5">
+          {allClients.map((c) => (
+            <Link key={c.id} href={`/settings?client=${c.id}`} className={`chip ${c.id === client.id ? "chip-active" : ""}`}>
+              {c.name}
+            </Link>
+          ))}
+        </div>
+      )}
+
+      <div className="mb-6 space-y-3 empty:hidden">
+        {params.created && (
+          <Alert tone="success">
+            Client added in dry run. Set its ICP, campaign and Instantly API key below; its webhook URL is on the Clients page.
+          </Alert>
+        )}
+        {params.saved && <Alert tone="success">Saved. New leads use these settings; use Reprocess on a lead to re-score it.</Alert>}
+        {params.error && <Alert tone="error">Not saved: {params.error}</Alert>}
       </div>
 
-      {params.created && (
-        <p className="rounded bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-          Client added in dry run. Set its ICP, campaign and Instantly API key below; its webhook URL is on the Clients page.
-        </p>
-      )}
-      {params.saved && (
-        <p className="rounded bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-          Saved. New leads use these settings; use Reprocess on a lead to re-score it.
-        </p>
-      )}
-      {params.error && <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">Not saved: {params.error}</p>}
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[11rem_1fr]">
+        <nav className="hidden lg:block">
+          <ul className="sticky top-8 space-y-1 text-sm">
+            {SECTIONS.map((section) => (
+              <li key={section.id}>
+                <a href={`#${section.id}`} className="block rounded-md px-3 py-1.5 text-slate-600 hover:bg-white hover:text-slate-900">
+                  {section.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
 
-      <form action={saveSettings} className="space-y-4">
-        <input type="hidden" name="clientId" value={client.id} />
+        <form action={saveSettings} className="min-w-0 space-y-6">
+          <input type="hidden" name="clientId" value={client.id} />
 
-        <section className="card space-y-4">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Sending</h2>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" name="dryRun" defaultChecked={client.dryRun} />
-            <span className="font-medium">Dry run for this client</span>
-            <span className="text-xs text-slate-500">save the Instantly request instead of sending it</span>
-          </label>
-          {globalDryRun && (
-            <p className="rounded bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              GLOBAL_DRY_RUN=true in .env: every client is in dry run regardless of this switch.
-            </p>
-          )}
-          <Field label="Instantly campaign ID" hint="UUID, used for every intent level">
-            <input
-              name="campaignDefault"
-              defaultValue={settings.campaigns.default}
-              placeholder="00000000-0000-0000-0000-000000000000"
-              className="input font-mono"
-            />
-          </Field>
-          <Field
-            label="Instantly API key"
-            hint={client.instantlyApiKeyEnc ? "set (stored encrypted); leave blank to keep it" : "not set"}
-          >
-            <input name="instantlyApiKey" type="password" autoComplete="off" className="input font-mono" />
-          </Field>
-          {client.instantlyApiKeyEnc && (
-            <label className="flex items-center gap-2 text-xs text-slate-600">
-              <input type="checkbox" name="clearApiKey" /> Remove the stored API key
-            </label>
-          )}
-        </section>
-
-        <section className="card space-y-4">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">ICP</h2>
-          <Field label="Minimum score" hint="0–100; leads below it stop as below_icp">
-            <input name="minScore" type="number" min={0} max={100} defaultValue={settings.icp.minScore} className="input w-28" />
-          </Field>
-          <div className="grid gap-4 md:grid-cols-2">
-            <ListField name="countries" label="Countries" values={settings.icp.countries} hint="ISO codes, e.g. GB" />
-            <ListField name="employeeRanges" label="Employee ranges" values={settings.icp.employeeRanges} hint="e.g. 11-50, 1000+" />
-            <ListField name="industriesInclude" label="Industries" values={settings.icp.industriesInclude} />
-            <ListField
-              name="industriesExclude"
-              label="Excluded industries"
-              values={settings.icp.industriesExclude}
-              hint="a match sets the score to 0"
-            />
-            <ListField name="titleKeywords" label="Title keywords" values={settings.icp.titleKeywords} />
-            <ListField name="titleExcludeKeywords" label="Excluded title keywords" values={settings.icp.titleExcludeKeywords} />
-            <ListField name="highIntent" label="High-intent pages" values={settings.pages.highIntent} hint="paths, * wildcard" />
-            <Field label="Seniorities" hint="half the title points without a keyword match">
-              <div className="flex flex-wrap gap-3 pt-1">
-                {SENIORITIES.map((s) => (
-                  <label key={s} className="flex items-center gap-1.5">
-                    <input type="checkbox" name="seniorities" value={s} defaultChecked={settings.icp.seniorities.includes(s)} />
-                    {s}
-                  </label>
-                ))}
+          <Card id="sending" title="Sending" description="Where leads go in Instantly, and whether they are actually sent.">
+            <div className="space-y-5">
+              <Toggle
+                name="dryRun"
+                label="Dry run for this client"
+                hint="Save the Instantly request instead of sending it."
+                defaultChecked={client.dryRun}
+              />
+              {globalDryRun && (
+                <Alert tone="warning">GLOBAL_DRY_RUN=true in .env: every client is in dry run regardless of this switch.</Alert>
+              )}
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                <Field label="Instantly campaign ID" hint="UUID">
+                  <input
+                    name="campaignDefault"
+                    defaultValue={settings.campaigns.default}
+                    placeholder="00000000-0000-0000-0000-000000000000"
+                    className="input font-mono"
+                  />
+                </Field>
+                <Field label="Instantly API key" hint={client.instantlyApiKeyEnc ? "set (encrypted); blank keeps it" : "not set"}>
+                  <input
+                    name="instantlyApiKey"
+                    type="password"
+                    autoComplete="off"
+                    placeholder={client.instantlyApiKeyEnc ? "••••••••••••" : ""}
+                    className="input font-mono"
+                  />
+                </Field>
               </div>
-            </Field>
-          </div>
-        </section>
+              {client.instantlyApiKeyEnc && (
+                <label className="flex items-center gap-2 text-sm text-slate-600">
+                  <input type="checkbox" name="clearApiKey" className="rounded border-slate-300" /> Remove the stored API key
+                </label>
+              )}
+            </div>
+          </Card>
 
-        <button type="submit" className="btn-primary">
-          Save settings
-        </button>
-      </form>
-    </div>
+          <Card id="icp" title="Ideal customer profile" description="Each factor is worth 20 points; leads below the minimum stop as below_icp.">
+            <div className="space-y-5">
+              <Field label="Minimum score" hint="0–100">
+                <input name="minScore" type="number" min={0} max={100} defaultValue={settings.icp.minScore} className="input w-28" />
+              </Field>
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                <ListField name="countries" label="Countries" values={settings.icp.countries} hint="ISO codes, e.g. GB" />
+                <ListField name="employeeRanges" label="Employee ranges" values={settings.icp.employeeRanges} hint="e.g. 11-50, 1000+" />
+                <ListField name="industriesInclude" label="Industries" values={settings.icp.industriesInclude} />
+                <ListField
+                  name="industriesExclude"
+                  label="Excluded industries"
+                  values={settings.icp.industriesExclude}
+                  hint="a match sets the score to 0"
+                />
+                <ListField name="titleKeywords" label="Title keywords" values={settings.icp.titleKeywords} />
+                <ListField name="titleExcludeKeywords" label="Excluded title keywords" values={settings.icp.titleExcludeKeywords} />
+                <ListField name="highIntent" label="High-intent pages" values={settings.pages.highIntent} hint="paths, * wildcard" />
+                <Field label="Seniorities" hint="half the title points without a keyword match">
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {SENIORITIES.map((s) => (
+                      <label
+                        key={s}
+                        className="flex cursor-pointer items-center gap-1.5 rounded-md border border-slate-200 px-2.5 py-1.5 text-sm has-checked:border-brand-500 has-checked:bg-brand-50 has-checked:text-brand-700"
+                      >
+                        <input type="checkbox" name="seniorities" value={s} defaultChecked={settings.icp.seniorities.includes(s)} className="sr-only" />
+                        {s.replace("_", "-")}
+                      </label>
+                    ))}
+                  </div>
+                </Field>
+              </div>
+            </div>
+          </Card>
+
+          <Card
+            id="copy"
+            title="Email copy"
+            description={
+              <>
+                The email itself is written in the Instantly campaign. With AI first lines on, each lead gets a personal opener and
+                subject there as <code>{"{{firstLine}}"}</code> and <code>{"{{subjectLine}}"}</code>.
+              </>
+            }
+          >
+            <div className="space-y-5">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <Toggle
+                  name="aiFirstLine"
+                  label="Write AI first line + subject"
+                  hint="Needs OPENAI_API_KEY and OPENAI_MODEL in .env."
+                  defaultChecked={settings.copy.aiFirstLine}
+                />
+                <Toggle
+                  name="requireFirstLine"
+                  label="Require a first line"
+                  hint="Fail the lead instead of pushing it without one."
+                  defaultChecked={settings.copy.requireFirstLine}
+                />
+              </div>
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                <Field label="Sender name">
+                  <input name="senderName" defaultValue={settings.copy.senderName} className="input" placeholder="Sam" />
+                </Field>
+                <Field label="Tone">
+                  <input name="tone" defaultValue={settings.copy.tone} className="input" />
+                </Field>
+                <Field label="What the sender's company does">
+                  <textarea name="companyDescription" defaultValue={settings.copy.companyDescription} rows={3} className="input" />
+                </Field>
+                <Field label="Offer" hint="what the email proposes">
+                  <textarea name="offer" defaultValue={settings.copy.offer} rows={3} className="input" />
+                </Field>
+                <ListField name="bannedPhrases" label="Banned phrases" values={settings.copy.bannedPhrases} />
+              </div>
+            </div>
+          </Card>
+
+          <Card
+            id="variables"
+            title="Custom variables"
+            description={
+              <>
+                Sent with every lead as Instantly custom variables: <code>calendarLink = https://cal.com/sam</code> becomes{" "}
+                <code>{"{{calendarLink}}"}</code> in the campaign.
+              </>
+            }
+          >
+            <div className="space-y-4">
+              <Field label="Variables" hint="one per line: name = value">
+                <textarea
+                  name="customVariables"
+                  defaultValue={settings.customVariables.map((v) => `${v.name} = ${v.value}`).join("\n")}
+                  rows={Math.max(5, settings.customVariables.length + 2)}
+                  className="input font-mono"
+                  placeholder={"calendarLink = https://cal.com/sam\ngreeting = Hi {{firstName|there}}"}
+                />
+              </Field>
+              <div className="rounded-lg bg-slate-50 p-4 text-xs text-slate-600">
+                <p>
+                  Values can be fixed text or use lead data. Text after <code>|</code> is the fallback when the value is empty, e.g.{" "}
+                  <code>{"Hi {{firstName|there}}"}</code>.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {BUILTIN_INSTANTLY_VARIABLES.map((name) => (
+                    <code key={name} className="bg-white ring-1 ring-slate-200">{`{{${name}}}`}</code>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          <div className="sticky bottom-4 z-10 flex items-center justify-end gap-3 rounded-xl border border-slate-200 bg-white/90 px-4 py-3 shadow-lg backdrop-blur">
+            <span className="mr-auto text-xs text-slate-500">Editing {client.name}</span>
+            <button type="submit" className="btn-primary">
+              Save settings
+            </button>
+          </div>
+        </form>
+      </div>
+    </>
   );
 }

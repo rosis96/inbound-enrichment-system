@@ -19,7 +19,7 @@ export async function login(formData: FormData): Promise<void> {
     if (error instanceof AuthConfigError) redirect("/login?error=config");
     throw error;
   }
-  redirect("/leads");
+  redirect("/dashboard");
 }
 
 export async function logout(): Promise<void> {

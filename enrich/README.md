@@ -5,7 +5,7 @@ Internal lead-enrichment system: Happierleads (webhook) → enrichment pipeline 
 ## Current flow
 
 ```
-POST /api/hooks/happierleads/:clientToken → raw_events → lead.normalise → lead.gates → lead.icp → lead.push
+POST /api/hooks/happierleads/:clientToken → raw_events → lead.normalise → lead.gates → lead.icp → lead.personalise → lead.push
 ```
 
 | Step | Does | Ends as |
@@ -14,20 +14,22 @@ POST /api/hooks/happierleads/:clientToken → raw_events → lead.normalise → 
 | normalise | Tolerant parse (`packages/core/src/happierleads.ts`), upserts the company by domain, creates the lead and its contacts | `raw_events.error` when there is no usable domain |
 | gates | Own domain, free-email domain, suppressed domain, dedupe (same company `pushed`/`dry_run_complete` within `dedupeDays`); drops suppressed, free-email and email-less contacts | `gated_out` |
 | icp | 0–100 score, 20 points each for country, size, industry, title and high-intent pages, with a reason per factor; picks the best contact | `below_icp` (default `icp.minScore` is 80) |
-| push | `POST https://api.instantly.ai/api/v2/leads` with `skip_if_in_workspace: true` and string-only `custom_variables`. In dry run (`GLOBAL_DRY_RUN` or the client's switch) the request is saved instead of sent | `dry_run_complete`, `pushed`, `no_contact` or `failed` (401, 402, other 4xx, no campaign, no API key; 429, 5xx and network errors are retried 3 times first) |
+| personalise | Runs the active `first_line` prompt (OpenAI JSON mode, model from `prompts.model` or `OPENAI_MODEL`) for the selected contact; guardrails reject lines over 200 / subjects over 60 characters, brackets, banned phrases and mentions of the visit. Skipped when `copy.aiFirstLine` is off or OpenAI is not configured | `personalised`; without a line the lead still goes to push, unless `copy.requireFirstLine` is on (then `failed`) |
+| push | `POST https://api.instantly.ai/api/v2/leads` with `skip_if_in_workspace: true` and string-only `custom_variables` (built-ins incl. `firstLine`/`subjectLine`, plus the client's custom variables rendered with `{{name|fallback}}`). In dry run (`GLOBAL_DRY_RUN` or the client's switch) the request is saved instead of sent | `dry_run_complete`, `pushed`, `no_contact` or `failed` (401, 402, other 4xx, no campaign, no API key; 429, 5xx and network errors are retried 3 times first) |
 
 Jobs live in the `jobs` table (`packages/db/src/queue.ts`): workers claim them with an atomic
 `UPDATE … ORDER BY … LIMIT 1`, retry with exponential backoff (3 retries, 5 s doubling up to 300 s), requeue jobs left
 active by a crashed worker after 15 minutes and delete finished jobs after 7 days.
 Every step writes a row to `enrichment_steps`; the lead page shows them, including the Instantly request and response.
-The `people`, `email`, `research`, `personalise` and `review` jobs are still stubs and are not in the chain.
+The `people`, `email`, `research` and `review` jobs are still stubs and are not in the chain; until `research` runs, the first-line prompt describes the company by name and industry only.
 
 Admin UI at http://localhost:3000, login with `ADMIN_EMAIL` / `ADMIN_PASSWORD`:
 
 - **Leads**: table, and a page per lead with ICP reasons, contacts, raw payload, Instantly request/response and a
   **Reprocess** button (re-runs the chain from the stored payload with the current settings)
 - **Clients**: webhook URLs
-- **Settings**: ICP lists, threshold, high-intent pages, campaign ID, dry run, Instantly API key (stored encrypted)
+- **Settings**: ICP lists, threshold, high-intent pages, campaign ID, dry run, Instantly API key (stored encrypted), email copy
+  (AI first line, sender, offer, tone, banned phrases) and custom variables (`name = value` per line, sent to Instantly)
 
 ## Folder map
 

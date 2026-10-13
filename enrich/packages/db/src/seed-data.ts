@@ -34,6 +34,10 @@ export const demoSettings: ClientSettingsInput = {
     bannedPhrases: ["synergy", "circle back", "hope this finds you well"],
     tone: "friendly, concise, professional",
   },
+  customVariables: [
+    { name: "calendarLink", value: "https://cal.com/demo-agency/20min" },
+    { name: "greeting", value: "Hi {{firstName|there}}" },
+  ],
 };
 
 export const demoSuppression: { kind: SuppressionKind; value: string; reason: SuppressionReason }[] = [

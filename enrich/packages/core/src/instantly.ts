@@ -1,4 +1,5 @@
-import type { IntentLevel, LeadPage } from "@enrich/shared";
+import type { CustomVariable, IntentLevel, LeadPage } from "@enrich/shared";
+import { renderTemplate } from "./template";
 
 /** Body for POST https://api.instantly.ai/api/v2/leads. */
 export interface InstantlyLeadRequest {
@@ -14,9 +15,18 @@ export interface InstantlyLeadRequest {
 
 export interface InstantlyLeadInput {
   campaignId: string | null;
-  contact: { email: string; firstName: string | null; lastName: string | null; title: string | null };
+  contact: {
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+    title: string | null;
+    firstLine?: string | null;
+    subjectLine?: string | null;
+  };
   company: { domain: string; name: string | null; industry: string | null; country: string | null };
   lead: { id: string; icpScore: number | null; intentLevel: IntentLevel | null; intentTopic: string | null; pages: LeadPage[] };
+  /** Client-defined variables; values are templates over the built-in ones. */
+  customVariables?: CustomVariable[];
 }
 
 /** Drops empty values; Instantly custom variables must be flat strings here. */
@@ -30,8 +40,37 @@ function stringsOnly(values: Record<string, string | number | null | undefined>)
   return out;
 }
 
-export function buildInstantlyLead({ campaignId, contact, company, lead }: InstantlyLeadInput): InstantlyLeadRequest {
+export function buildInstantlyLead({
+  campaignId,
+  contact,
+  company,
+  lead,
+  customVariables = [],
+}: InstantlyLeadInput): InstantlyLeadRequest {
   const pagesVisited = [...new Set(lead.pages.map((page) => page.path))].slice(0, 10).join(", ");
+  const builtins = stringsOnly({
+    jobTitle: contact.title,
+    industry: company.industry,
+    country: company.country,
+    icpScore: lead.icpScore,
+    intentLevel: lead.intentLevel,
+    intentTopic: lead.intentTopic,
+    pagesVisited,
+    enrichLeadId: lead.id,
+    firstLine: contact.firstLine,
+    subjectLine: contact.subjectLine,
+  });
+  const templateValues = {
+    ...builtins,
+    email: contact.email,
+    firstName: contact.firstName,
+    lastName: contact.lastName,
+    companyName: company.name,
+    website: company.domain,
+  };
+  const custom = stringsOnly(
+    Object.fromEntries(customVariables.map((variable) => [variable.name, renderTemplate(variable.value, templateValues)])),
+  );
   return {
     campaign: campaignId,
     email: contact.email,
@@ -40,15 +79,6 @@ export function buildInstantlyLead({ campaignId, contact, company, lead }: Insta
     ...(company.name ? { company_name: company.name } : {}),
     website: company.domain,
     skip_if_in_workspace: true,
-    custom_variables: stringsOnly({
-      jobTitle: contact.title,
-      industry: company.industry,
-      country: company.country,
-      icpScore: lead.icpScore,
-      intentLevel: lead.intentLevel,
-      intentTopic: lead.intentTopic,
-      pagesVisited,
-      enrichLeadId: lead.id,
-    }),
+    custom_variables: { ...custom, ...builtins },
   };
 }

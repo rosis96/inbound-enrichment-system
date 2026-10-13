@@ -16,6 +16,20 @@ function list(formData: FormData, name: string): string[] {
     .filter(Boolean);
 }
 
+/** "name = value" per line; a line without "=" is kept with an empty name so validation reports it. */
+function customVariables(formData: FormData): { name: string; value: string }[] {
+  return String(formData.get("customVariables") ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const at = line.indexOf("=");
+      return at === -1 ? { name: "", value: line } : { name: line.slice(0, at).trim(), value: line.slice(at + 1).trim() };
+    });
+}
+
+const text = (formData: FormData, name: string) => String(formData.get(name) ?? "").trim();
+
 export async function saveSettings(formData: FormData): Promise<void> {
   await requireAdmin();
   const clientId = String(formData.get("clientId") ?? "");
@@ -41,10 +55,29 @@ export async function saveSettings(formData: FormData): Promise<void> {
       minScore: Number.isFinite(minScore) ? Math.round(minScore) : existing.icp.minScore,
     },
     pages: { ...existing.pages, highIntent: list(formData, "highIntent") },
-    campaigns: { ...existing.campaigns, default: String(formData.get("campaignDefault") ?? "").trim() },
+    campaigns: { ...existing.campaigns, default: text(formData, "campaignDefault") },
+    copy: {
+      ...existing.copy,
+      aiFirstLine: formData.get("aiFirstLine") === "on",
+      requireFirstLine: formData.get("requireFirstLine") === "on",
+      senderName: text(formData, "senderName"),
+      tone: text(formData, "tone") || existing.copy.tone,
+      companyDescription: text(formData, "companyDescription"),
+      offer: text(formData, "offer"),
+      bannedPhrases: list(formData, "bannedPhrases"),
+    },
+    customVariables: customVariables(formData),
   });
   if (!parsed.success) {
-    const message = parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("; ");
+    const message = parsed.error.issues
+      .map((issue) => {
+        // customVariables.2.name → "custom variable line 3"
+        if (issue.path[0] === "customVariables" && typeof issue.path[1] === "number") {
+          return `custom variable line ${issue.path[1] + 1}: ${issue.message}`;
+        }
+        return `${issue.path.join(".")}: ${issue.message}`;
+      })
+      .join("; ");
     redirect(`/settings?client=${clientId}&error=${encodeURIComponent(message)}`);
   }
 

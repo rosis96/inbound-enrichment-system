@@ -30,3 +30,18 @@ describe("ClientSettings", () => {
     expect(ClientSettings.safeParse({ campaigns: { default: "not-a-uuid" } }).success).toBe(false);
   });
 });
+
+describe("customVariables", () => {
+  it("defaults to none and accepts valid names", () => {
+    expect(parseClientSettings({}).customVariables).toEqual([]);
+    expect(ClientSettings.safeParse({ customVariables: [{ name: "calendarLink", value: "https://cal.com/x" }] }).success).toBe(true);
+  });
+
+  it("rejects bad, built-in and duplicate names", () => {
+    expect(ClientSettings.safeParse({ customVariables: [{ name: "1bad", value: "x" }] }).success).toBe(false);
+    expect(ClientSettings.safeParse({ customVariables: [{ name: "FirstLine", value: "x" }] }).success).toBe(false);
+    expect(
+      ClientSettings.safeParse({ customVariables: [{ name: "a", value: "x" }, { name: "A", value: "y" }] }).success,
+    ).toBe(false);
+  });
+});

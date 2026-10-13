@@ -40,9 +40,10 @@ export async function handlePush(data: LeadJobData, ctx: JobContext): Promise<vo
   const campaignId = (lead.intentLevel && settings.campaigns[lead.intentLevel]) || settings.campaigns.default || null;
   const body = buildInstantlyLead({
     campaignId,
-    contact: { email: contact.email, firstName: contact.firstName, lastName: contact.lastName, title: contact.title },
+    contact: { ...contact, email: contact.email },
     company,
     lead,
+    customVariables: settings.customVariables,
   });
   const request = { method: "POST", url: INSTANTLY_LEADS_URL, body };
 

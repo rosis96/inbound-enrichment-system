@@ -4,3 +4,5 @@ export * from "./icp";
 export * from "./instantly";
 export * from "./normalise";
 export * from "./seniority";
+export * from "./personalise";
+export * from "./template";

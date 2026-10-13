@@ -7,6 +7,8 @@ import { PayloadError, parseHappierleadsPayload } from "./happierleads";
 import { parseEmployeeRange, scoreIcp } from "./icp";
 import { buildInstantlyLead } from "./instantly";
 import { countryCode, normaliseDomain, pathMatches, urlPath } from "./normalise";
+import { buildFirstLinePrompt, checkFirstLine } from "./personalise";
+import { renderTemplate, templatePlaceholders } from "./template";
 
 // Mirrors the demo client's seeded settings.
 const settings = parseClientSettings({
@@ -201,5 +203,65 @@ describe("buildInstantlyLead", () => {
       enrichLeadId: "l1",
     });
     expect(Object.values(body.custom_variables).every((v) => typeof v === "string")).toBe(true);
+  });
+});
+
+describe("buildInstantlyLead custom variables", () => {
+  const base = {
+    campaignId: null,
+    contact: { email: "a@b.example", firstName: null, lastName: null, title: null, firstLine: "Loved the new pricing page.", subjectLine: "Quick idea" },
+    company: { domain: "b.example", name: "Bee", industry: null, country: null },
+    lead: { id: "l1", icpScore: 90, intentLevel: null, intentTopic: "SEO", pages: [] },
+  };
+
+  it("sends the first line, subject and rendered custom variables", () => {
+    const body = buildInstantlyLead({
+      ...base,
+      customVariables: [
+        { name: "calendarLink", value: "https://cal.com/sam" },
+        { name: "greeting", value: "Hi {{firstName|there}}" },
+        { name: "pitch", value: "{{intentTopic}} help for {{companyName}}" },
+        { name: "empty", value: "{{industry}}" },
+      ],
+    });
+    expect(body.custom_variables).toMatchObject({
+      firstLine: "Loved the new pricing page.",
+      subjectLine: "Quick idea",
+      calendarLink: "https://cal.com/sam",
+      greeting: "Hi there",
+      pitch: "SEO help for Bee",
+    });
+    expect(body.custom_variables.empty).toBeUndefined();
+  });
+});
+
+describe("renderTemplate", () => {
+  it("fills values, fallbacks and blanks", () => {
+    expect(renderTemplate("{{ a }}-{{b|x}}-{{c}}", { a: "1", b: " " })).toBe("1-x-");
+    expect(templatePlaceholders("{{a}} {{b|y}} {{a}}")).toEqual(["a", "b"]);
+  });
+});
+
+describe("checkFirstLine", () => {
+  it("passes a clean line and flags guardrail problems", () => {
+    expect(checkFirstLine({ firstLine: "Your ops team clearly ships fast.", subjectLine: "Ops idea" }, [])).toEqual([]);
+    const problems = checkFirstLine(
+      { firstLine: "I saw you visited our site, {name}. Let's circle back.", subjectLine: "x".repeat(61) },
+      ["circle back"],
+    );
+    expect(problems).toHaveLength(4);
+  });
+});
+
+describe("buildFirstLinePrompt", () => {
+  it("fills copy, contact and a name + industry summary when research has not run", () => {
+    const settings = parseClientSettings({ copy: { senderName: "Sam", bannedPhrases: ["synergy"] } });
+    const prompt = buildFirstLinePrompt("{{senderName}}|{{firstName}}|{{companySummary}}|{{bannedPhrases}}|{{intentTopic}}", {
+      copy: settings.copy,
+      contact: { firstName: null, title: null },
+      company: { domain: "b.example", name: "Bee", industry: "Software", summary: null },
+      intentTopic: null,
+    });
+    expect(prompt).toBe("Sam|there|Bee, a company in Software|synergy|general");
   });
 });

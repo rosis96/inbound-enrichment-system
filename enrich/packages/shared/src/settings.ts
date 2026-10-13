@@ -58,7 +58,59 @@ export const CopySettings = z.object({
   offer: z.string().default(""),
   bannedPhrases: stringList,
   tone: z.string().default("friendly, concise, professional"),
+  // AI first line + subject, sent to Instantly as {{firstLine}} / {{subjectLine}}.
+  aiFirstLine: z.boolean().default(true),
+  // When true, a lead whose first line could not be written fails instead of being pushed without one.
+  requireFirstLine: z.boolean().default(false),
 });
+
+/** Variables the push step always sets; custom variables cannot reuse these names. */
+export const BUILTIN_INSTANTLY_VARIABLES = [
+  "email",
+  "firstName",
+  "lastName",
+  "companyName",
+  "website",
+  "jobTitle",
+  "industry",
+  "country",
+  "icpScore",
+  "intentLevel",
+  "intentTopic",
+  "pagesVisited",
+  "enrichLeadId",
+  "firstLine",
+  "subjectLine",
+] as const;
+
+export const CustomVariable = z.object({
+  name: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z][A-Za-z0-9_]{0,49}$/, "must start with a letter and use only letters, digits and _ (max 50)"),
+  // Static text or a template: {{firstName}}, {{companyName|your team}} (text after | is the fallback).
+  value: z.string().trim().min(1).max(2000),
+});
+export type CustomVariable = z.infer<typeof CustomVariable>;
+
+const reserved = new Set(BUILTIN_INSTANTLY_VARIABLES.map((name) => name.toLowerCase()));
+
+export const CustomVariables = z
+  .array(CustomVariable)
+  .max(30)
+  .default([])
+  .superRefine((variables, ctx) => {
+    const seen = new Set<string>();
+    variables.forEach((variable, index) => {
+      const key = variable.name.toLowerCase();
+      if (reserved.has(key)) {
+        ctx.addIssue({ code: "custom", path: [index, "name"], message: `"${variable.name}" is a built-in variable` });
+      } else if (seen.has(key)) {
+        ctx.addIssue({ code: "custom", path: [index, "name"], message: `"${variable.name}" is defined twice` });
+      }
+      seen.add(key);
+    });
+  });
 
 export const ClientSettings = z.object({
   icp: IcpSettings.prefault({}),
@@ -70,6 +122,7 @@ export const ClientSettings = z.object({
   ownDomains: z.array(z.string().trim().toLowerCase().min(1)).default([]),
   campaigns: CampaignSettings.prefault({}),
   copy: CopySettings.prefault({}),
+  customVariables: CustomVariables,
 });
 
 export type ClientSettings = z.output<typeof ClientSettings>;
