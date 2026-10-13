@@ -69,6 +69,7 @@ export async function saveSettings(formData: FormData): Promise<void> {
       minScore: Number.isFinite(minScore) ? Math.round(minScore) : existing.icp.minScore,
     },
     pages: { ...existing.pages, highIntent: list(formData, "highIntent") },
+    freeEmailDomains: list(formData, "freeEmailDomains").map((domain) => domain.toLowerCase()),
     campaigns: { ...existing.campaigns, default: text(formData, "campaignDefault") },
     copy: {
       ...existing.copy,

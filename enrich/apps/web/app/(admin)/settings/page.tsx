@@ -178,6 +178,12 @@ export default async function SettingsPage({
                 <ListField name="titleKeywords" label="Title keywords" values={settings.icp.titleKeywords} />
                 <ListField name="titleExcludeKeywords" label="Excluded title keywords" values={settings.icp.titleExcludeKeywords} />
                 <ListField name="highIntent" label="High-intent pages" values={settings.pages.highIntent} hint="paths, * wildcard" />
+                <ListField
+                  name="freeEmailDomains"
+                  label="Free email domains"
+                  values={settings.freeEmailDomains}
+                  hint="contacts and companies on these are gated out"
+                />
                 <Field label="Seniorities" hint="half the title points without a keyword match">
                   <div className="flex flex-wrap gap-2 pt-1">
                     {SENIORITIES.map((s) => (
