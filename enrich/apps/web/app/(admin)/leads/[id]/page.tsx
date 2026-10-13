@@ -62,6 +62,8 @@ export default async function LeadPage({
   ]);
   const pushSteps = steps.filter((step) => step.step === "push");
   const lastPersonalise = [...steps].reverse().find((step) => step.step === "personalise");
+  // Variables whose candidates all failed the checks, with each candidate's problems.
+  const rejected = Object.entries((lastPersonalise?.output as { rejected?: Record<string, string[]> } | null)?.rejected ?? {});
   const selected = leadContacts.find((contact) => contact.selected);
   const lastGates = [...steps].reverse().find((step) => step.step === "gates");
   const dryRun = getEnv().GLOBAL_DRY_RUN || client.dryRun;
@@ -156,6 +158,21 @@ export default async function LeadPage({
                 </dl>
               ) : null}
               {lastPersonalise?.error && <p className="mt-3 text-sm text-amber-700">{lastPersonalise.error}</p>}
+              {rejected.length > 0 && (
+                <div className="mt-3 space-y-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+                  <p className="font-medium">Not sent because every AI version failed the checks:</p>
+                  {rejected.map(([name, problems]) => (
+                    <div key={name}>
+                      <code className="bg-white/70">{`{{${name}}}`}</code>
+                      <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                        {problems.map((problem) => (
+                          <li key={problem}>{problem}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              )}
               {!selected?.aiVariables && !lastPersonalise?.error && (
                 <p className="text-sm text-slate-500">{lastPersonalise ? "None written." : "The personalise step has not run."}</p>
               )}

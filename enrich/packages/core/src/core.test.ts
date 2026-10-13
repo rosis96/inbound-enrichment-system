@@ -262,6 +262,23 @@ describe("checkVariable", () => {
   });
 });
 
+describe("checkVariable website-visit phrases", () => {
+  it("allows destination names with Visit but blocks talk about the prospect's visit", () => {
+    const v = { name: "line", instructions: "x", minWords: 1, maxWords: 40, examples: [] };
+    expect(checkVariable(v, "Visit Seattle's new waterfront campaign puts the food scene front and centre.", [])).toEqual([]);
+    expect(checkVariable(v, "visit.brussels has a strong autumn events calendar.", [])).toEqual([]);
+    for (const bad of [
+      "I saw you visited our pricing page last week.",
+      "Thanks for checking out our site recently.",
+      "Following your recent visit, a quick idea.",
+      "Our tracking shows strong interest from your team.",
+      "Noticed you were looking at our services.",
+    ]) {
+      expect(checkVariable(v, bad, [])).toContain("mentions the website visit or tracking");
+    }
+  });
+});
+
 describe("pickVariables", () => {
   it("keeps the first passing candidate and reports the rest", () => {
     const picked = pickVariables(

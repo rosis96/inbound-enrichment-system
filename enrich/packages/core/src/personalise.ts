@@ -76,7 +76,14 @@ Rules:
 Return JSON: {"variables": {"<name>": ["<best candidate>", "<second candidate>"]}} with every variable listed above.`;
 }
 
-const TRACKING_WORDS = /\b(visit(ed|ing)?|browsing|browsed|tracking|tracked|our (web)?site|saw you (on|were))\b/i;
+// Phrases that give away the website visit. Bare "visit" is allowed: it is part of names like "Visit Seattle".
+const TRACKING_PHRASES = [
+  /\b(visited|visiting|browsed|browsing|checked out|checking out|looked at|looking at|viewed|viewing|landed on)\s+(our|my)\b/i,
+  /\byour (recent |latest )?(visit|visits|browsing|time on)\b/i,
+  /\b(our|my) (web ?site|site|pricing page|landing page|page)\b/i,
+  /\btrack(ed|ing)\b/i,
+  /\b(saw|noticed|see|seen)( that)? you\b/i,
+];
 
 export function wordCount(text: string): number {
   return text.split(/\s+/).filter(Boolean).length;
@@ -91,7 +98,7 @@ export function checkVariable(variable: AiVariable, text: string, bannedPhrases:
   }
   if (variable.maxChars && text.length > variable.maxChars) problems.push(`longer than ${variable.maxChars} characters`);
   if (/[[\]{}<>]/.test(text)) problems.push("contains brackets or placeholders");
-  if (TRACKING_WORDS.test(text)) problems.push("mentions the website visit or tracking");
+  if (TRACKING_PHRASES.some((pattern) => pattern.test(text))) problems.push("mentions the website visit or tracking");
   const lower = text.toLowerCase();
   for (const phrase of bannedPhrases) {
     if (phrase && lower.includes(phrase.toLowerCase())) problems.push(`uses banned phrase "${phrase}"`);
