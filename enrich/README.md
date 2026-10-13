@@ -33,6 +33,9 @@ Admin UI at http://localhost:3000, login with `ADMIN_EMAIL` / `ADMIN_PASSWORD`:
 - **Settings**: ICP lists, threshold, high-intent pages, campaign ID, dry run, Instantly API key (stored encrypted), email copy
   (sender, offer, tone, banned phrases), AI variables (name, instructions, word/character limits, examples) and custom
   variables (`name = value` per line)
+- **Suppression**: per-client do-not-contact domains and emails (customer, open deal, competitor, …), added by pasting or CSV, with optional expiry; checked by the gates step
+- **Test lead**: run any website and contact through the real pipeline, optionally without pushing, skipping the duplicate check, or re-reading the website
+- **Webhook events**: every Happierleads payload as received, with errors and a Reprocess button
 - **Integrations**: OpenAI API key (encrypted), model and token prices, and an optional Firecrawl key, shared by all
   clients and stored in `app_settings`. Each value saved here overrides `.env`; blank values fall back to `.env`. **Test key**
   checks the key and model with `GET /v1/models` (no tokens used).

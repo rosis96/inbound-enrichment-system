@@ -13,6 +13,7 @@ const NAV: { href: string; label: string; icon: IconName }[] = [
   { href: "/events", label: "Webhook events", icon: "bolt" },
   { href: "/sequence", label: "Sequence", icon: "mail" },
   { href: "/clients", label: "Clients", icon: "clients" },
+  { href: "/suppression", label: "Suppression", icon: "shield" },
   { href: "/settings", label: "Settings", icon: "settings" },
   { href: "/integrations", label: "Integrations", icon: "key" },
 ];

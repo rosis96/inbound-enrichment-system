@@ -7,3 +7,4 @@ export * from "./seniority";
 export * from "./personalise";
 export * from "./template";
 export * from "./sequence";
+export * from "./suppression";
