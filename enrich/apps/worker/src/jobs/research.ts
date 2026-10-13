@@ -3,7 +3,7 @@ import { and, companies, desc, eq, prompts, resolveAiConfig } from "@enrich/db";
 import { completeJson, crawlCompanySite } from "@enrich/providers";
 import { CompanySummary, LeadJobData, QUEUE_RETRY } from "@enrich/shared";
 import type { JobContext } from "../context";
-import { enqueue, loadLead, recordStep } from "../pipeline";
+import { enqueue, loadLead, loadTestFlags, recordStep } from "../pipeline";
 
 export const schema = LeadJobData;
 
@@ -21,11 +21,12 @@ export async function handleResearch(data: LeadJobData, ctx: JobContext): Promis
   const step = (record: Omit<Parameters<typeof recordStep>[1], "leadId" | "step">) =>
     recordStep(ctx, { leadId: lead.id, step: "research", ...record });
   const ai = await resolveAiConfig(ctx.db, ctx.env);
+  const refresh = Boolean((await loadTestFlags(ctx.db, lead.rawEventId))?.freshResearch);
   const fresh = (at: Date | null) => at !== null && Date.now() - at.getTime() < CACHE_DAYS * 86_400_000;
 
   // 1. Crawl, unless a recent crawl exists.
   let crawlText = company.crawlText;
-  if (!crawlText || !fresh(company.crawledAt) || data.force) {
+  if (!crawlText || !fresh(company.crawledAt) || refresh || data.force) {
     const started = Date.now();
     const outcome = await crawlCompanySite(company.domain, {
       firecrawlApiKey: ai.firecrawlApiKey,

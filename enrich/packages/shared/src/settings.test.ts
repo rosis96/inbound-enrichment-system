@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { testLeadFlags } from "./lead";
 import { ClientSettings, DEFAULT_FREE_EMAIL_DOMAINS, parseClientSettings } from "./settings";
 
 describe("ClientSettings", () => {
@@ -56,5 +57,13 @@ describe("aiVariables and sequence", () => {
     expect(ClientSettings.safeParse({ aiVariables: [{ name: "x", instructions: "y", minWords: 9, maxWords: 3 }] }).success).toBe(false);
     const parsed = parseClientSettings({ sequence: { steps: [{ variants: [{ body: "Hi {{firstName}}" }] }] } });
     expect(parsed.sequence.steps[0]).toEqual({ waitDays: 3, variants: [{ subject: "", body: "Hi {{firstName}}" }] });
+  });
+});
+
+describe("testLeadFlags", () => {
+  it("reads test-lead options and ignores real payloads", () => {
+    expect(testLeadFlags({ company: {} })).toBeNull();
+    expect(testLeadFlags({ _enrichTest: { skipDedupe: true } })).toEqual({ dryRun: true, skipDedupe: true, freshResearch: false });
+    expect(testLeadFlags(null)).toBeNull();
   });
 });

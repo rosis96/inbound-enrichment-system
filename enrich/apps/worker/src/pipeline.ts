@@ -1,5 +1,5 @@
-import { clients, companies, eq, enrichmentSteps, leads, sendJob, type Database } from "@enrich/db";
-import { queueName, type PipelineStep, type StepStatus } from "@enrich/shared";
+import { clients, companies, eq, enrichmentSteps, leads, rawEvents, sendJob, type Database } from "@enrich/db";
+import { queueName, testLeadFlags, type PipelineStep, type StepStatus, type TestLeadFlags } from "@enrich/shared";
 import type { JobContext } from "./context";
 
 /** Enqueues the next pipeline step for a lead. */
@@ -47,4 +47,10 @@ export async function loadLead(db: Database, leadId: string) {
     .innerJoin(companies, eq(leads.companyId, companies.id))
     .where(eq(leads.id, leadId));
   return row;
+}
+
+/** Options of a lead sent from the Test lead page, or null for real webhooks. */
+export async function loadTestFlags(db: Database, rawEventId: string): Promise<TestLeadFlags | null> {
+  const [event] = await db.select({ payload: rawEvents.payload }).from(rawEvents).where(eq(rawEvents.id, rawEventId));
+  return testLeadFlags(event?.payload);
 }

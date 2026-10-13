@@ -4,7 +4,7 @@ import { createInstantlyLead, INSTANTLY_LEADS_URL } from "@enrich/providers";
 import { LeadJobData, parseClientSettings, QUEUE_RETRY, type LeadStatus } from "@enrich/shared";
 import { decryptSecret } from "@enrich/shared/crypto";
 import type { JobContext } from "../context";
-import { loadLead, recordStep } from "../pipeline";
+import { loadLead, loadTestFlags, recordStep } from "../pipeline";
 
 export const schema = LeadJobData;
 
@@ -47,7 +47,8 @@ export async function handlePush(data: LeadJobData, ctx: JobContext): Promise<vo
   });
   const request = { method: "POST", url: INSTANTLY_LEADS_URL, body };
 
-  const dryRunSource = ctx.env.GLOBAL_DRY_RUN ? "GLOBAL_DRY_RUN" : client.dryRun ? "client" : null;
+  const test = await loadTestFlags(ctx.db, lead.rawEventId);
+  const dryRunSource = ctx.env.GLOBAL_DRY_RUN ? "GLOBAL_DRY_RUN" : client.dryRun ? "client" : test?.dryRun ? "test lead" : null;
   if (dryRunSource) {
     await setLead({ status: "dry_run_complete", skipReason: null, campaignId });
     await recordStep(ctx, {

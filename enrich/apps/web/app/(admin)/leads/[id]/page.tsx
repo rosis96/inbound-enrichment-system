@@ -1,8 +1,10 @@
 import { asc, clients, companies, contacts, eq, enrichmentSteps, getDb, leads, rawEvents } from "@enrich/db";
+import { testLeadFlags, type LeadStatus } from "@enrich/shared";
 import { getEnv } from "@enrich/shared/env";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { Icon } from "@/components/icons";
 import { StatusBadge, statusLabel } from "@/components/status-badge";
 import { Alert, Card, DescriptionList, formatDateTime, PageHeader } from "@/components/ui";
@@ -64,6 +66,9 @@ export default async function LeadPage({
   const lastGates = [...steps].reverse().find((step) => step.step === "gates");
   const dryRun = getEnv().GLOBAL_DRY_RUN || client.dryRun;
   const score = lead.icpScore;
+  const test = testLeadFlags(rawEvent.payload);
+  // Steps still to come: keep the page updating until the lead reaches an end state.
+  const inProgress = (["received", "normalised", "researched", "personalised"] as LeadStatus[]).includes(lead.status);
 
   return (
     <>
@@ -77,6 +82,15 @@ export default async function LeadPage({
           <span className="flex flex-wrap items-center gap-3">
             {company.name ?? company.domain}
             <StatusBadge status={lead.status} />
+            {test && (
+              <span
+                className="rounded-md bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700 ring-1 ring-violet-600/20 ring-inset"
+                title={`Test lead: ${test.dryRun ? "not pushed" : "pushed if live"}${test.skipDedupe ? ", duplicate check skipped" : ""}${test.freshResearch ? ", website re-read" : ""}`}
+              >
+                Test lead{test.dryRun ? " · not pushed" : ""}
+              </span>
+            )}
+            <AutoRefresh active={inProgress} />
           </span>
         }
         description={`${company.domain} · ${client.name} · received ${formatDateTime(lead.createdAt)}`}

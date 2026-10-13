@@ -92,3 +92,23 @@ export const PersonalisationMeta = z.object({
   model: z.string(),
 });
 export type PersonalisationMeta = z.infer<typeof PersonalisationMeta>;
+
+/** Key in a raw payload marking a lead sent from the Test lead page, with its options. */
+export const TEST_PAYLOAD_KEY = "_enrichTest";
+
+export const TestLeadFlags = z.object({
+  /** Save the Instantly request instead of sending it, whatever the client's switch says. */
+  dryRun: z.boolean().default(true),
+  /** Ignore the "contacted recently" gate. */
+  skipDedupe: z.boolean().default(false),
+  /** Crawl and summarise the website again even if a recent result is cached. */
+  freshResearch: z.boolean().default(false),
+});
+export type TestLeadFlags = z.infer<typeof TestLeadFlags>;
+
+/** Test-lead options from a raw payload, or null for real webhooks. */
+export function testLeadFlags(payload: unknown): TestLeadFlags | null {
+  if (!payload || typeof payload !== "object" || !(TEST_PAYLOAD_KEY in payload)) return null;
+  const parsed = TestLeadFlags.safeParse((payload as Record<string, unknown>)[TEST_PAYLOAD_KEY]);
+  return parsed.success ? parsed.data : null;
+}

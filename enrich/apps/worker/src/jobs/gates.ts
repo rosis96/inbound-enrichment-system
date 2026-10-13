@@ -2,7 +2,7 @@ import { evaluateGates } from "@enrich/core";
 import { and, contacts, desc, eq, gt, gte, inArray, isNull, leads, ne, or, suppression } from "@enrich/db";
 import { LeadJobData, parseClientSettings } from "@enrich/shared";
 import type { JobContext } from "../context";
-import { enqueue, loadLead, recordStep } from "../pipeline";
+import { enqueue, loadLead, loadTestFlags, recordStep } from "../pipeline";
 
 export const schema = LeadJobData;
 
@@ -30,8 +30,9 @@ export async function handleGates(data: LeadJobData, ctx: JobContext): Promise<v
     .from(suppression)
     .where(and(eq(suppression.clientId, client.id), or(isNull(suppression.expiresAt), gt(suppression.expiresAt, now))));
 
+  const test = await loadTestFlags(ctx.db, lead.rawEventId);
   const [duplicate] =
-    settings.dedupeDays > 0
+    settings.dedupeDays > 0 && !test?.skipDedupe
       ? await ctx.db
           .select({ id: leads.id, status: leads.status, createdAt: leads.createdAt })
           .from(leads)
