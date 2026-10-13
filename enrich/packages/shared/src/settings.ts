@@ -227,3 +227,13 @@ export function knownPlaceholders(settings: ClientSettings): string[] {
     ]),
   ];
 }
+
+/** App-wide integration settings from the Integrations page; each blank value falls back to .env. */
+export const IntegrationSettings = z.object({
+  openaiApiKeyEnc: z.string().min(1).optional(),
+  openaiModel: z.string().trim().min(1).max(100).optional(),
+  llmPriceInputPer1M: z.number().min(0).max(1000).optional(),
+  llmPriceOutputPer1M: z.number().min(0).max(1000).optional(),
+  firecrawlApiKeyEnc: z.string().min(1).optional(),
+});
+export type IntegrationSettings = z.infer<typeof IntegrationSettings>;

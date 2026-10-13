@@ -168,7 +168,12 @@ export default async function DashboardPage() {
             <li className="flex items-start justify-between gap-3">
               <div>
                 <div className="font-medium text-slate-900">AI spend this month</div>
-                <div className="text-xs text-slate-500">from LLM_PRICE_* in .env</div>
+                <div className="text-xs text-slate-500">
+                  prices set on{" "}
+                  <Link href="/integrations" className="hover:underline">
+                    Integrations
+                  </Link>
+                </div>
               </div>
               <span className="font-mono text-sm text-slate-900">${llmSpend.toFixed(2)}</span>
             </li>

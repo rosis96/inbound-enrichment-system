@@ -219,7 +219,7 @@ export default async function SettingsPage({
                 <Toggle
                   name="aiVariablesEnabled"
                   label="Write AI variables for each lead"
-                  hint="Needs OPENAI_API_KEY and OPENAI_MODEL in .env."
+                  hint="Needs an OpenAI key and model on the Integrations page (or in .env)."
                   defaultChecked={settings.copy.aiVariablesEnabled}
                 />
                 <Toggle

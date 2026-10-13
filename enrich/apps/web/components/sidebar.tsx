@@ -12,6 +12,7 @@ const NAV: { href: string; label: string; icon: IconName }[] = [
   { href: "/sequence", label: "Sequence", icon: "mail" },
   { href: "/clients", label: "Clients", icon: "clients" },
   { href: "/settings", label: "Settings", icon: "settings" },
+  { href: "/integrations", label: "Integrations", icon: "key" },
 ];
 
 function NavLinks({ pathname }: { pathname: string }) {

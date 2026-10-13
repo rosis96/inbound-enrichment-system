@@ -88,3 +88,38 @@ export async function completeJson(
     durationMs,
   };
 }
+
+export type KeyCheck =
+  | { ok: true; modelFound: boolean | null }
+  | { ok: false; status: number | null; message: string };
+
+/** Verifies an OpenAI key (and optionally a model) without spending tokens: GET /v1/models[/model]. */
+export async function checkOpenAiKey(apiKey: string, model?: string, options: { fetch?: typeof fetch } = {}): Promise<KeyCheck> {
+  const doFetch = options.fetch ?? fetch;
+  const get = (path: string) =>
+    doFetch(`https://api.openai.com/v1/models${path}`, {
+      headers: { authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(15_000),
+    });
+  try {
+    const response = await get(model ? `/${encodeURIComponent(model)}` : "");
+    if (response.ok) return { ok: true, modelFound: model ? true : null };
+    if (response.status === 404 && model) {
+      // Key is fine if the plain list works; only the model is unknown.
+      const list = await get("");
+      return list.ok ? { ok: true, modelFound: false } : { ok: false, status: list.status, message: await errorMessage(list) };
+    }
+    return { ok: false, status: response.status, message: await errorMessage(response) };
+  } catch (error) {
+    return { ok: false, status: null, message: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+async function errorMessage(response: Response): Promise<string> {
+  try {
+    const body = (await response.json()) as { error?: { message?: string } };
+    return body.error?.message ?? `HTTP ${response.status}`;
+  } catch {
+    return `HTTP ${response.status}`;
+  }
+}

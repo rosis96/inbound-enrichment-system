@@ -33,6 +33,9 @@ Admin UI at http://localhost:3000, login with `ADMIN_EMAIL` / `ADMIN_PASSWORD`:
 - **Settings**: ICP lists, threshold, high-intent pages, campaign ID, dry run, Instantly API key (stored encrypted), email copy
   (sender, offer, tone, banned phrases), AI variables (name, instructions, word/character limits, examples) and custom
   variables (`name = value` per line)
+- **Integrations**: OpenAI API key (encrypted), model and token prices, and an optional Firecrawl key, shared by all
+  clients and stored in `app_settings`. Each value saved here overrides `.env`; blank values fall back to `.env`. **Test key**
+  checks the key and model with `GET /v1/models` (no tokens used).
 - **Sequence**: the email steps (wait days, A–E versions per step) with starter templates, click-to-insert variables,
   checks (unknown variables, missing subject, leftover `[placeholders]`, banned phrases) and a preview rendered for a real
   lead. **Create campaign in Instantly** makes a paused campaign (`POST /api/v2/campaigns`: schedule, steps, sending

@@ -11,3 +11,4 @@ export * from "./prompts";
 export * from "./worker-heartbeats";
 export * from "./admin-users";
 export * from "./jobs";
+export * from "./app-settings";

@@ -1,5 +1,5 @@
 import { buildVariablesPrompt, pickVariables, VARIABLES_PROMPT_VERSION } from "@enrich/core";
-import { and, contacts, eq, isNotNull, leads } from "@enrich/db";
+import { and, contacts, eq, isNotNull, leads, resolveAiConfig } from "@enrich/db";
 import { completeJson } from "@enrich/providers";
 import { AiVariablesOutput, LeadJobData, parseClientSettings, QUEUE_RETRY } from "@enrich/shared";
 import type { JobContext } from "../context";
@@ -45,8 +45,10 @@ export async function handlePersonalise(data: LeadJobData, ctx: JobContext): Pro
 
   if (!copy.aiVariablesEnabled) return finish("skipped", null, { output: { note: "disabled for client" } });
   if (aiVariables.length === 0) return finish("skipped", null, { output: { note: "no AI variables configured" } });
-  if (!ctx.env.OPENAI_API_KEY) return finish("skipped", "no_openai_api_key");
-  const model = ctx.env.OPENAI_MODEL;
+  const ai = await resolveAiConfig(ctx.db, ctx.env);
+  const apiKey = ai.openaiApiKey;
+  const model = ai.openaiModel;
+  if (!apiKey) return finish("skipped", "no_openai_api_key");
   if (!model) return finish("skipped", "no_openai_model");
 
   const prompt = buildVariablesPrompt({
@@ -58,7 +60,7 @@ export async function handlePersonalise(data: LeadJobData, ctx: JobContext): Pro
     pages: lead.pages,
   });
   const input = { model, promptVersion: VARIABLES_PROMPT_VERSION, variables: aiVariables.map((v) => v.name), prompt };
-  const { outcome, durationMs } = await completeJson(ctx.env.OPENAI_API_KEY, model, prompt);
+  const { outcome, durationMs } = await completeJson(apiKey, model, prompt);
 
   if (outcome.kind === "transient") {
     const output = { status: outcome.status, body: outcome.body };
@@ -83,7 +85,7 @@ export async function handlePersonalise(data: LeadJobData, ctx: JobContext): Pro
 
   const { inputTokens, outputTokens } = outcome.usage;
   const costUsd =
-    ((ctx.env.LLM_PRICE_INPUT_PER_1M ?? 0) * inputTokens + (ctx.env.LLM_PRICE_OUTPUT_PER_1M ?? 0) * outputTokens) / 1_000_000;
+    (ai.priceInputPer1M * inputTokens + ai.priceOutputPer1M * outputTokens) / 1_000_000;
   const parsed = AiVariablesOutput.safeParse(outcome.json);
   if (!parsed.success) {
     return finish("failed", "reply does not match {variables: {...}}", { input, output: { json: outcome.json }, durationMs, costUsd });

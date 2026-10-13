@@ -1,5 +1,5 @@
 import { renderTemplate } from "@enrich/core";
-import { and, companies, desc, eq, prompts } from "@enrich/db";
+import { and, companies, desc, eq, prompts, resolveAiConfig } from "@enrich/db";
 import { completeJson, crawlCompanySite } from "@enrich/providers";
 import { CompanySummary, LeadJobData, QUEUE_RETRY } from "@enrich/shared";
 import type { JobContext } from "../context";
@@ -20,6 +20,7 @@ export async function handleResearch(data: LeadJobData, ctx: JobContext): Promis
   const { lead, company } = row;
   const step = (record: Omit<Parameters<typeof recordStep>[1], "leadId" | "step">) =>
     recordStep(ctx, { leadId: lead.id, step: "research", ...record });
+  const ai = await resolveAiConfig(ctx.db, ctx.env);
   const fresh = (at: Date | null) => at !== null && Date.now() - at.getTime() < CACHE_DAYS * 86_400_000;
 
   // 1. Crawl, unless a recent crawl exists.
@@ -27,7 +28,7 @@ export async function handleResearch(data: LeadJobData, ctx: JobContext): Promis
   if (!crawlText || !fresh(company.crawledAt) || data.force) {
     const started = Date.now();
     const outcome = await crawlCompanySite(company.domain, {
-      firecrawlApiKey: ctx.env.CRAWLER_FALLBACK_PROVIDER === "firecrawl" ? ctx.env.FIRECRAWL_API_KEY : undefined,
+      firecrawlApiKey: ai.firecrawlApiKey,
     });
     if (outcome.kind === "failed") {
       await step({ provider: "crawler", status: "failed", input: { domain: company.domain }, error: `${outcome.code}: ${outcome.detail}`, durationMs: Date.now() - started });
@@ -52,9 +53,10 @@ export async function handleResearch(data: LeadJobData, ctx: JobContext): Promis
   }
 
   // 2. Summarise with the active company_summary prompt.
-  const model = ctx.env.OPENAI_MODEL;
-  if (!ctx.env.OPENAI_API_KEY || !model) {
-    await step({ provider: "openai", status: "skipped", error: ctx.env.OPENAI_API_KEY ? "no_openai_model" : "no_openai_api_key" });
+  const apiKey = ai.openaiApiKey;
+  const model = ai.openaiModel;
+  if (!apiKey || !model) {
+    await step({ provider: "openai", status: "skipped", error: apiKey ? "no_openai_model" : "no_openai_api_key" });
     return enqueue(ctx, "personalise", data);
   }
   const [prompt] = await ctx.db
@@ -70,7 +72,7 @@ export async function handleResearch(data: LeadJobData, ctx: JobContext): Promis
 
   const text = renderTemplate(prompt.template, { domain: company.domain, companyName: company.name ?? company.domain, crawlText });
   const input = { model: prompt.model ?? model, promptVersion: prompt.version, chars: crawlText.length };
-  const { outcome, durationMs } = await completeJson(ctx.env.OPENAI_API_KEY, prompt.model ?? model, text);
+  const { outcome, durationMs } = await completeJson(apiKey, prompt.model ?? model, text);
   if (outcome.kind === "transient" && ctx.attempt <= QUEUE_RETRY.retryLimit) {
     await step({ provider: "openai", status: "failed", input, output: { status: outcome.status, willRetry: true }, error: outcome.code, durationMs });
     throw new Error(`${outcome.code} (attempt ${ctx.attempt})`);
@@ -82,7 +84,7 @@ export async function handleResearch(data: LeadJobData, ctx: JobContext): Promis
 
   const { inputTokens, outputTokens } = outcome.usage;
   const costUsd =
-    ((ctx.env.LLM_PRICE_INPUT_PER_1M ?? 0) * inputTokens + (ctx.env.LLM_PRICE_OUTPUT_PER_1M ?? 0) * outputTokens) / 1_000_000;
+    (ai.priceInputPer1M * inputTokens + ai.priceOutputPer1M * outputTokens) / 1_000_000;
   // Models sometimes return more hooks than asked; keep the first three rather than fail.
   const json = outcome.json as { personalisationHooks?: unknown };
   if (Array.isArray(json?.personalisationHooks)) json.personalisationHooks = json.personalisationHooks.slice(0, 3);

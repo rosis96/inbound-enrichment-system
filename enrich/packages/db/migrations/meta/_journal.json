@@ -15,6 +15,13 @@
       "when": 1791889963088,
       "tag": "0001_contact_ai_variables",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1791901406938,
+      "tag": "0002_app_settings",
+      "breakpoints": true
     }
   ]
 }
