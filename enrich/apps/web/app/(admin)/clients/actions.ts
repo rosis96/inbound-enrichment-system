@@ -1,6 +1,6 @@
 "use server";
 
-import { clients, eq, getDb } from "@enrich/db";
+import { clients, eq, getDb, leads } from "@enrich/db";
 import { ClientSettings } from "@enrich/shared";
 import { generateToken } from "@enrich/shared/crypto";
 import { randomUUID } from "node:crypto";
@@ -62,4 +62,27 @@ export async function createClient(formData: FormData): Promise<void> {
 
   revalidatePath("/clients");
   redirect(`/settings?client=${id}&created=1`);
+}
+
+/**
+ * Permanently deletes a client with its leads, contacts, webhook events, suppression list and lab tests.
+ * The client's name must be typed to confirm. Companies are shared, so they stay.
+ */
+export async function deleteClient(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const id = String(formData.get("clientId") ?? "");
+  const confirm = String(formData.get("confirm") ?? "").trim();
+  const db = getDb();
+  const [client] = await db.select({ id: clients.id, name: clients.name }).from(clients).where(eq(clients.id, id));
+  if (!client) fail("Client not found");
+  if (confirm !== client.name) fail(`Type "${client.name}" exactly to delete it`);
+
+  await db.transaction(async (tx) => {
+    // Leads first: they point at webhook events without a cascade, so the client's cascade could stop on them.
+    await tx.delete(leads).where(eq(leads.clientId, client.id));
+    await tx.delete(clients).where(eq(clients.id, client.id));
+  });
+
+  revalidatePath("/clients");
+  redirect(`/clients?deleted=${encodeURIComponent(client.name)}`);
 }

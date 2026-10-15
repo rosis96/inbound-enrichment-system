@@ -124,6 +124,7 @@ export async function handlePersonalise(data: LeadJobData, ctx: JobContext): Pro
     calls: generated.calls + 1,
     plan: planned.plan,
     planCheck: planned.check,
+    planRaw: planned.raw,
     planError: planned.error,
     results: generated.results,
   };

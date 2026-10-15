@@ -2,7 +2,7 @@ import { generateToken } from "@enrich/shared/crypto";
 import { hashPassword } from "@enrich/shared/password";
 import { getEnv, loadRootEnvFile } from "@enrich/shared/env";
 import { PROMPT_KEYS } from "@enrich/shared";
-import { eq, sql } from "drizzle-orm";
+import { count, eq, sql } from "drizzle-orm";
 import { createDb } from "../client";
 import { adminUsers, clients, prompts, suppression } from "../schema";
 import { DEMO_CLIENT_SLUG, demoSettings, demoSuppression, promptsV1 } from "../seed-data";
@@ -13,6 +13,20 @@ const { db, pool } = createDb(env.DATABASE_URL, { max: 1 });
 
 try {
   await db.transaction(async (tx) => {
+    await tx
+      .insert(prompts)
+      .values(PROMPT_KEYS.map((key) => ({ key, version: 1, template: promptsV1[key], model: null, active: true })))
+      .onDuplicateKeyUpdate({ set: { id: sql`id` } });
+    console.log(`Seeded prompt v1 for ${PROMPT_KEYS.join(", ")}`);
+
+    // The demo client is only for an empty install: the seed runs on every deploy, and a demo client
+    // deleted on the Clients page must stay deleted.
+    const [{ existing } = { existing: 0 }] = await tx.select({ existing: count() }).from(clients);
+    if (existing > 0) {
+      console.log(`Skipped demo client: ${existing} client(s) already exist`);
+      return;
+    }
+
     await tx
       .insert(clients)
       .values({
@@ -36,16 +50,10 @@ try {
       .values(demoSuppression.map((row) => ({ ...row, clientId: client.id, source: "manual" as const })))
       .onDuplicateKeyUpdate({ set: { id: sql`id` } });
 
-    await tx
-      .insert(prompts)
-      .values(PROMPT_KEYS.map((key) => ({ key, version: 1, template: promptsV1[key], model: null, active: true })))
-      .onDuplicateKeyUpdate({ set: { id: sql`id` } });
-
-    console.log(`Seeded client "${client.name}" (${client.slug}), dry run: ${client.dryRun}`);
+    console.log(`Seeded client "${client.name}" (${client.slug}), dry run: ${client.dryRun}, with ${demoSuppression.length} suppression rows`);
     console.log(`  Happierleads webhook: ${env.APP_URL}/api/hooks/happierleads/${client.happierleadsToken}`);
     console.log(`  Instantly webhook:    ${env.APP_URL}/api/hooks/instantly/${client.instantlyWebhookToken}`);
   });
-  console.log(`Seeded ${demoSuppression.length} suppression rows and prompt v1 for ${PROMPT_KEYS.join(", ")}`);
 
   if (env.ADMIN_EMAIL && env.ADMIN_PASSWORD) {
     // Re-hashing on every seed lets ADMIN_PASSWORD be rotated by re-running the seed.

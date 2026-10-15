@@ -51,18 +51,26 @@ describe("rulesFromInstructions", () => {
 
   it("reads openings, strict limits, ranges, characters and CTA bans", () => {
     expect(rulesFromInstructions("Start the complimentary line with 'By the way,'. Keep it under 40 words. Do not include a CTA.")).toMatchObject({
-      startsWith: "By the way,",
+      startsWith: ["By the way,"],
       maxWords: 39,
       noCta: true,
     });
     expect(rulesFromInstructions(`Begin with "In my last email," and write 20-30 words, no more than 200 characters.`)).toMatchObject({
-      startsWith: "In my last email,",
+      startsWith: ["In my last email,"],
       minWords: 20,
       maxWords: 30,
       maxChars: 200,
     });
-    expect(rulesFromInstructions("Start with 'And, I've seen how' then continue.").startsWith).toBe("And, I've seen how");
+    expect(rulesFromInstructions("Start with 'And, I've seen how' then continue.").startsWith).toEqual(["And, I've seen how"]);
     expect(rulesFromInstructions("Write in one sentence.").sentences).toBe(1);
+  });
+
+  it("accepts every alternative opening, not just the first", () => {
+    expect(rulesFromInstructions("Never claim results. Start with 'We recently' or 'Our work with'. Never present the prospect as a client.").startsWith).toEqual([
+      "We recently",
+      "Our work with",
+    ]);
+    expect(rulesFromInstructions(`Begin with "Hi", "Hello" or "Hey" and keep it short.`).startsWith).toEqual(["Hi", "Hello", "Hey"]);
   });
 });
 
@@ -74,7 +82,7 @@ describe("effectiveRules", () => {
 
   it("lets the explicit sentence and opening fields win over the instructions", () => {
     const rules = effectiveRules({ name: "v", instructions: "Write exactly two sentences.", minWords: 1, maxWords: 50, sentences: 3, startsWith: "So," });
-    expect(rules).toMatchObject({ sentences: 3, startsWith: "So,", from: { sentences: "field", startsWith: "field" } });
+    expect(rules).toMatchObject({ sentences: 3, startsWith: ["So,"], from: { sentences: "field", startsWith: "field" } });
   });
 });
 

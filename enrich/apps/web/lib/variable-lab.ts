@@ -113,7 +113,7 @@ export async function startTest(input: {
         companyId: company.id,
         contact: input.contact,
         plan: planned.plan,
-        planCheck: planned.check,
+        planCheck: planned.check ?? (planned.raw === undefined ? null : { raw: planned.raw }),
         planError: planned.error,
         results: generated.results,
         model: generated.model ?? planned.model ?? model,
@@ -162,7 +162,8 @@ export async function retest(testId: string, mode: RetestMode): Promise<void> {
     let planModel: string | null = null;
     if (!plan || mode.kind === "replan" || mode.kind === "refresh") {
       const planned = await buildPlan(context, llm);
-      ({ plan, check: planCheck, error: planError } = planned);
+      ({ plan, error: planError } = planned);
+      planCheck = planned.check ?? (planned.raw === undefined ? null : { raw: planned.raw });
       costUsd += planned.costUsd;
       planModel = planned.model;
     }

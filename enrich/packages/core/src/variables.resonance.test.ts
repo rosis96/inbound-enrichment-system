@@ -119,6 +119,48 @@ const check = (variable: AiVariable, text: string, extra: Partial<{ resolved: Re
   });
 const failing = (variable: AiVariable, text: string, extra = {}) => check(variable, text, extra).filter((c) => c.status === "fail").map((c) => c.id);
 
+describe("planner replies in unexpected shapes", () => {
+  it("accepts wrapped replies, nulls, numeric ids and objects instead of phrases", () => {
+    const messy = {
+      plan: {
+        description: null,
+        category: "mixed-use real estate developers",
+        industry: "mixed-use real estate",
+        activities: "real estate development",
+        details: [
+          { id: 1, type: "Project", title: "The Grand LA", description: null, quote: "The Grand LA is designed by Frank Gehry", source: "https://www.related.com/our-company/properties" },
+          { id: 2, name: null },
+        ],
+        primaryDetailId: 1,
+        alternativeDetailId: null,
+        relevantServices: [{ name: "Place strategy" }, "Brand strategy"],
+        challenges: null,
+        benefits: [{ text: "clearer differentiation" }],
+        longTermOutcomes: "lasting asset value",
+        proof: null,
+        unknowns: ["budget", 42, null],
+      },
+    };
+    const result = verifyPlan(messy, context);
+    expect(result).not.toBeNull();
+    const parsed = result!.plan;
+    expect(parsed.details).toMatchObject([{ id: "1", kind: "project", name: "The Grand LA", verified: true, sourceUrl: "https://www.related.com/our-company/properties" }]);
+    expect(parsed.primaryDetailId).toBe("1");
+    expect(parsed.activities).toEqual(["real estate development"]);
+    expect(parsed.relevantServices).toEqual(["Place strategy", "Brand strategy"]);
+    expect(parsed.benefits).toEqual(["clearer differentiation"]);
+    expect(parsed.challenges).toEqual([]);
+    expect(parsed.unknowns).toEqual(["budget", "42"]);
+  });
+
+  it("keeps the raw reply when it still cannot be used", async () => {
+    const { buildPlan } = await import("./variables");
+    const planned = await buildPlan(context, fakeLlm([ok(["not", "a", "plan"])]));
+    expect(planned.error).toBe("plan reply did not match the expected shape");
+    expect(planned.raw).toEqual(["not", "a", "plan"]);
+  });
+});
+
 describe("what the writer receives for descriptive placeholders", () => {
   const prompt = buildWriterPrompt({ context, plan, all: [VALUE_PROPOSITION], tasks: [{ variable: VALUE_PROPOSITION }], results: {} });
 
@@ -286,6 +328,26 @@ describe("unverified claims are never accepted to fill a placeholder", () => {
     expect(results.value_proposition).toMatchObject({ status: "ok", text: GOOD });
     expect(llm.prompts[1]).toContain("No invented figures: not in the research or approved proof: 35");
     expect(llm.prompts[1]).toContain("Use the same research; do not add new facts.");
+  });
+
+  it("fails a sentence that credits the sender with a business result, even with an approved figure", () => {
+    const caseStudy: AiVariable = {
+      name: "relevant_case_study",
+      instructions: "One sentence pointing to the most relevant Resonance project. Start with 'We recently' or 'Our work with'.",
+      minWords: 5,
+      maxWords: 30,
+      examples: [],
+    };
+    const run = (text: string) =>
+      validateVariable({ variable: caseStudy, all: [caseStudy], generated: { text, resolved: {}, detailIds: [], insufficientEvidence: [] }, plan, context, results: {} })
+        .filter((c) => c.status === "fail")
+        .map((c) => c.id);
+    expect(run("Our work with East Village, Calgary attracted $3 billion in private investment to the downtown.")).toEqual(
+      expect.arrayContaining(["claims"]),
+    );
+    expect(run("Our work with East Village, Calgary increased visitation to its downtown.")).toEqual(["claims"]);
+    expect(run("Our work with East Village, Calgary shaped the place brand and development strategy for its downtown.")).toEqual([]);
+    expect(run("We recently shared research on where Americans want to live with East Village, Calgary.")).toEqual([]);
   });
 
   it("flags a placeholder that needed a specific detail the research could not support", () => {

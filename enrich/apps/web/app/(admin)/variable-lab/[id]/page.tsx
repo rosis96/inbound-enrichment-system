@@ -43,6 +43,7 @@ interface PlanCheck {
   unverifiedDetails?: { name: string; evidence: string }[];
   droppedServices?: string[];
   droppedProof?: string[];
+  raw?: unknown;
 }
 
 function PlanCard({ plan, check, error }: { plan: PersonalisationPlan; check: PlanCheck | null; error: string | null }) {
@@ -52,7 +53,15 @@ function PlanCard({ plan, check, error }: { plan: PersonalisationPlan; check: Pl
     <Card title="Resolved context" description="One research plan, shared by every variable. Facts come from the website; challenges and benefits are interpretation.">
       {error && (
         <div className="mb-4">
-          <Alert tone="warning">The planner failed ({error}), so the variables were written from general information only.</Alert>
+          <Alert tone="warning">
+            The planner failed ({error}), so the variables were written from general information only. Use “Retest without recrawling” to try again.
+          </Alert>
+          {check?.raw !== undefined && (
+            <details className="mt-2 text-xs">
+              <summary className="cursor-pointer text-slate-500">Planner reply</summary>
+              <pre className="mt-1 max-h-64 overflow-auto rounded-md bg-slate-50 p-2 whitespace-pre-wrap">{JSON.stringify(check.raw, null, 2)}</pre>
+            </details>
+          )}
         </div>
       )}
       <DescriptionList
@@ -283,7 +292,7 @@ function rulesSummary(rules: ReturnType<typeof effectiveRules>): string[] {
   const list = [`${rules.minWords}-${rules.maxWords} words`];
   if (rules.maxChars) list.push(`≤ ${rules.maxChars} characters`);
   if (rules.sentences) list.push(`${rules.sentences} sentence${rules.sentences === 1 ? "" : "s"}`);
-  if (rules.startsWith) list.push(`starts “${rules.startsWith}”`);
+  if (rules.startsWith) list.push(`starts “${rules.startsWith.join("” or “")}”`);
   for (const s of rules.sentenceStarts) list.push(`sentence ${s.sentence} starts “${s.text}”`);
   if (rules.noCta) list.push("no CTA");
   return list;

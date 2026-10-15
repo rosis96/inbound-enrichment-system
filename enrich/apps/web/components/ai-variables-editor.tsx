@@ -104,7 +104,7 @@ function RulesLine({ variable }: { variable: AiVariableDraft }) {
   const items: string[] = [`${rules.minWords}-${rules.maxWords} words${rules.from.maxWords === "instructions" ? " (from instructions)" : ""}`];
   if (rules.maxChars) items.push(`≤ ${rules.maxChars} characters`);
   if (rules.sentences) items.push(`${rules.sentences} sentence${rules.sentences === 1 ? "" : "s"}`);
-  if (rules.startsWith) items.push(`starts “${rules.startsWith}”`);
+  if (rules.startsWith) items.push(`starts “${rules.startsWith.join("” or “")}”`);
   for (const s of rules.sentenceStarts) items.push(`sentence ${s.sentence} starts “${s.text}”`);
   if (rules.noCta) items.push("no CTA");
   return (

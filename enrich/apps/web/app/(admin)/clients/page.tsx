@@ -5,7 +5,7 @@ import { CopyButton } from "@/components/copy-button";
 import { Icon } from "@/components/icons";
 import { Alert, Card, EmptyState, PageHeader } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
-import { createClient } from "./actions";
+import { createClient, deleteClient } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +23,7 @@ function UrlRow({ label, url }: { label: string; url: string }) {
   );
 }
 
-export default async function ClientsPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+export default async function ClientsPage({ searchParams }: { searchParams: Promise<{ error?: string; deleted?: string }> }) {
   await requireAdmin();
   const params = await searchParams;
   const env = getEnv();
@@ -49,7 +49,8 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <div className="space-y-4 xl:col-span-2">
-          {params.error && <Alert tone="error">Not added: {params.error}</Alert>}
+          {params.error && <Alert tone="error">{params.error}</Alert>}
+          {params.deleted && <Alert tone="success">Deleted {params.deleted} and all of its leads.</Alert>}
           {rows.length === 0 && (
             <div className="card">
               <EmptyState title="No clients yet">Add your first client with the form.</EmptyState>
@@ -90,6 +91,22 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
                   <UrlRow label="Happierleads webhook URL" url={`${env.APP_URL}/api/hooks/happierleads/${client.token}`} />
                   <UrlRow label="Instantly webhook URL" url={`${env.APP_URL}/api/hooks/instantly/${client.instantlyToken}`} />
                 </div>
+                <details className="mt-4 border-t border-slate-100 pt-3">
+                  <summary className="cursor-pointer text-xs font-medium text-slate-500 hover:text-red-600">Delete client</summary>
+                  <form action={deleteClient} className="mt-3 flex flex-wrap items-end gap-2">
+                    <input type="hidden" name="clientId" value={client.id} />
+                    <label className="block min-w-60 flex-1 text-xs">
+                      <span className="text-slate-600">
+                        Permanently deletes its {client.leadCount} lead{client.leadCount === 1 ? "" : "s"}, contacts, webhook events, suppression list and
+                        settings, and stops its webhooks. Type <strong>{client.name}</strong> to confirm.
+                      </span>
+                      <input name="confirm" required autoComplete="off" className="input mt-1" />
+                    </label>
+                    <button type="submit" className="btn-secondary border-red-300 text-red-700 hover:bg-red-50">
+                      Delete {client.name}
+                    </button>
+                  </form>
+                </details>
               </div>
             );
           })}

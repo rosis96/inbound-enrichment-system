@@ -202,8 +202,8 @@ export interface InstructionRules {
   minWords?: number;
   maxWords?: number;
   maxChars?: number;
-  /** Required opening of the whole output. */
-  startsWith?: string;
+  /** Accepted openings of the whole output ("Start with 'A' or 'B'" gives two). */
+  startsWith?: string[];
   /** Required opening of a given sentence (1-based). */
   sentenceStarts: { sentence: number; text: string }[];
   noCta: boolean;
@@ -250,11 +250,17 @@ export function rulesFromInstructions(instructions: string): InstructionRules {
     rest = rest.replace(match[0], " ");
   }
   // "Start the complimentary line with 'By the way,'" / "Begin with …"
-  const start = rest.match(new RegExp(`\\b(?:start|begin|open)s?\\b[^.\\n"“'‘]{0,50}?\\bwith\\s+${QUOTED}`, "i"));
-  if (start) rules.startsWith = start[1] ?? start[2];
+  const start = rest.match(
+    new RegExp(`\\b(?:start|begin|open)s?\\b[^.\\n"“'‘]{0,50}?\\bwith\\s+${QUOTED}((?:(?:\\s*,\\s*(?:or\\s+)?|\\s+(?:or|and/or)\\s+)${QUOTED})*)`, "i"),
+  );
+  if (start) {
+    rules.startsWith = [(start[1] ?? start[2])!];
+    // "… or 'Our work with'": every alternative is accepted.
+    for (const alt of (start[3] ?? "").matchAll(new RegExp(QUOTED, "g"))) rules.startsWith.push((alt[1] ?? alt[2])!);
+  }
   // A rule on sentence one is the same as a rule on the whole output.
   const first = rules.sentenceStarts.find((s) => s.sentence === 1);
-  if (first && !rules.startsWith) rules.startsWith = first.text;
+  if (first && !rules.startsWith) rules.startsWith = [first.text];
   rules.sentenceStarts = rules.sentenceStarts.filter((s) => s.sentence !== 1);
 
   rules.noCta = /\b(?:no|not include an?|n't include an?|without an?|never include an?|avoid an?|exclude an?)\s+(?:cta|call[\s-]to[\s-]action)\b/i.test(text);
@@ -295,8 +301,9 @@ export function effectiveRules(variable: VariableLimits): EffectiveRules {
   if (maxChars !== undefined) from.maxChars = parsed.maxChars !== undefined ? "instructions" : "field";
   const sentences = variable.sentences ?? parsed.sentences;
   if (sentences !== undefined) from.sentences = variable.sentences !== undefined ? "field" : "instructions";
-  const startsWith = variable.startsWith?.trim() || parsed.startsWith;
-  if (startsWith) from.startsWith = variable.startsWith?.trim() ? "field" : "instructions";
+  const field = variable.startsWith?.trim();
+  const startsWith = field ? [field] : parsed.startsWith;
+  if (startsWith) from.startsWith = field ? "field" : "instructions";
 
   return { ...parsed, minWords, maxWords, maxChars, sentences, startsWith, from };
 }

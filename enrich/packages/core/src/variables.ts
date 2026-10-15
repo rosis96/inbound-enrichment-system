@@ -174,15 +174,68 @@ const listMatch = (value: string, allowed: string[]) => {
  * Parses the planner's reply and keeps only what can be checked: details whose evidence or name appears
  * in the crawled text (with the page they came from), and services and proof from the client's lists.
  */
+type Loose = Record<string, unknown>;
+const isLoose = (value: unknown): value is Loose => Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+/** A string from whatever the model put there: numbers are kept, null and objects become "". */
+function looseText(value: unknown, ...keys: string[]): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return String(value);
+  if (isLoose(value)) for (const key of keys) if (typeof value[key] === "string") return value[key];
+  return "";
+}
+
+/** A list of strings from a list, a single string or a list of objects with a text-like field. */
+function looseList(value: unknown): string[] {
+  const items = Array.isArray(value) ? value : typeof value === "string" ? [value] : [];
+  return items.map((item) => looseText(item, "text", "name", "title", "description", "value")).filter((item) => item.trim() !== "");
+}
+
+/**
+ * Coerces the planner's reply into the plan's shape: models sometimes wrap it ({"plan": {...}}), send
+ * null for empty fields, numbers for ids or objects where a phrase was asked for.
+ */
+export function normalisePlanReply(json: unknown): Loose | null {
+  let root = isLoose(json) ? json : null;
+  if (!root) return null;
+  const keys = Object.keys(root);
+  if (keys.length === 1 && isLoose(root[keys[0]!]) && !("category" in root) && !("details" in root)) root = root[keys[0]!] as Loose;
+
+  const id = (value: unknown) => (typeof value === "string" || typeof value === "number" ? String(value) : null);
+  const details = (Array.isArray(root.details) ? root.details : [])
+    .filter(isLoose)
+    .map((d, i) => ({
+      id: id(d.id) ?? `D${i + 1}`,
+      kind: looseText(d.kind ?? d.type).toLowerCase().replace(/[\s-]+/g, "_"),
+      name: looseText(d.name ?? d.title),
+      detail: looseText(d.detail ?? d.description ?? d.why),
+      evidence: looseText(d.evidence ?? d.quote),
+      sourceUrl: typeof d.sourceUrl === "string" ? d.sourceUrl : typeof d.source === "string" ? d.source : null,
+      verified: false,
+    }))
+    .filter((d) => d.name.trim() !== "")
+    .slice(0, 10);
+
+  return {
+    description: looseText(root.description),
+    category: looseText(root.category),
+    industry: looseText(root.industry),
+    activities: looseList(root.activities),
+    details,
+    primaryDetailId: id(root.primaryDetailId),
+    alternativeDetailId: id(root.alternativeDetailId),
+    relevantServices: looseList(root.relevantServices),
+    challenges: looseList(root.challenges),
+    benefits: looseList(root.benefits),
+    longTermOutcomes: looseList(root.longTermOutcomes),
+    proof: looseList(root.proof),
+    unknowns: looseList(root.unknowns),
+  };
+}
+
 export function verifyPlan(json: unknown, context: WriterContext): { plan: PersonalisationPlan; check: PlanCheck } | null {
-  const raw = json && typeof json === "object" ? { ...(json as Record<string, unknown>) } : null;
+  const raw = normalisePlanReply(json);
   if (!raw) return null;
-  if (Array.isArray(raw.details)) {
-    raw.details = raw.details
-      .filter((d): d is Record<string, unknown> => Boolean(d) && typeof d === "object")
-      .map((d, i) => ({ ...d, id: String(d.id ?? `D${i + 1}`), verified: false }))
-      .slice(0, 10);
-  }
   const parsed = PersonalisationPlan.safeParse(raw);
   if (!parsed.success) return null;
   const plan = parsed.data;
@@ -242,6 +295,8 @@ export interface PlanResult {
   check: PlanCheck | null;
   /** Why the fallback plan was used, if it was. */
   error: string | null;
+  /** The planner's reply when it could not be used, for debugging. */
+  raw?: unknown;
   model: string | null;
   costUsd: number;
 }
@@ -254,7 +309,9 @@ export async function buildPlan(context: WriterContext, llm: LlmJsonCall): Promi
     return { plan: fallbackPlan(context), check: null, error: reply.code, model: null, costUsd: 0 };
   }
   const verified = verifyPlan(reply.json, context);
-  if (!verified) return { plan: fallbackPlan(context), check: null, error: "plan reply did not match the expected shape", model: reply.model, costUsd: reply.costUsd };
+  if (!verified) {
+    return { plan: fallbackPlan(context), check: null, error: "plan reply did not match the expected shape", raw: reply.json, model: reply.model, costUsd: reply.costUsd };
+  }
   return { plan: verified.plan, check: verified.check, error: null, model: reply.model, costUsd: reply.costUsd };
 }
 
@@ -280,7 +337,7 @@ export function dataValues(context: WriterContext): Record<string, string | null
 function rulesList(rules: EffectiveRules): string[] {
   const lines: string[] = [];
   if (rules.sentences) lines.push(`exactly ${rules.sentences} sentence${rules.sentences === 1 ? "" : "s"}`);
-  if (rules.startsWith) lines.push(`starts with "${rules.startsWith}"`);
+  if (rules.startsWith) lines.push(`starts with ${rules.startsWith.map((o) => `"${o}"`).join(" or ")}`);
   for (const s of rules.sentenceStarts) lines.push(`sentence ${s.sentence} starts with "${s.text}"`);
   lines.push(`${rules.minWords}-${rules.maxWords} words`);
   if (rules.maxChars) lines.push(`at most ${rules.maxChars} characters`);
@@ -455,6 +512,11 @@ export function splitSentences(text: string): string[] {
 
 const CTA = /\b(let me know|book (?:a|some) (?:call|meeting|time)|schedule (?:a|some)|hop on a call|jump on a call|open to (?:a|an) (?:call|chat|conversation|meeting)|worth a (?:call|chat|conversation)|are you free|grab (?:a|some) time|calendar link|click here|reply (?:to this|with))\b/i;
 
+/** A sentence where the sender ("we", "our work", or its name) caused a business outcome. */
+const CLAIM_SUBJECT = /\b(?:we|our (?:work|team|research|strategy|strategies|approach|engagement|campaign|brand(?:ing)?))\b/i;
+const CLAIM_VERB = /\b(?:attracted|drove|driven|delivered|generated|increased|boosted|grew|produced|secured|raised|brought in|resulted in|led to|tripled|doubled)\b/i;
+const CLAIM_OUTCOME = /\b(?:investment|sales|revenue|visit(?:or|ation)s?|occupancy|bookings|growth|tenants|residents|traffic|leads|roi|returns?)\b/i;
+
 const startsWithText = (text: string, opening: string) => normaliseForMatch(text).startsWith(normaliseForMatch(opening));
 
 /** Capitalised multi-word names, e.g. "Hudson Yards", minus a leading sentence word like "And". */
@@ -561,7 +623,10 @@ export function validateVariable(input: ValidateInput): ValidationCheck[] {
 
   const sentences = splitSentences(text);
   if (rules.sentences) add("sentences", `Exactly ${rules.sentences} sentence${rules.sentences === 1 ? "" : "s"}`, sentences.length === rules.sentences, `${sentences.length} found`);
-  if (rules.startsWith) add("starts", `Starts with "${rules.startsWith}"`, startsWithText(text, rules.startsWith));
+  if (rules.startsWith) {
+    const options = rules.startsWith;
+    add("starts", `Starts with ${options.map((o) => `"${o}"`).join(" or ")}`, options.some((o) => startsWithText(text, o)));
+  }
   for (const s of rules.sentenceStarts) {
     const sentence = sentences[s.sentence - 1];
     add(`sentence-${s.sentence}`, `Sentence ${s.sentence} starts with "${s.text}"`, Boolean(sentence && startsWithText(sentence, s.text)), sentence ? undefined : "sentence missing");
@@ -570,6 +635,13 @@ export function validateVariable(input: ValidateInput): ValidationCheck[] {
     const cta = CTA.exec(text)?.[0] ?? (/\?\s*$/.test(text) ? "ends with a question" : null);
     add("cta", "No call to action", !cta, cta ?? undefined);
   }
+
+  // "Our work with X attracted $3 billion in investment": a result the sender cannot claim.
+  const sender = context.copy.senderName.trim().toLowerCase();
+  const claims = sentences.filter(
+    (s) => (CLAIM_SUBJECT.test(s) || (sender !== "" && s.toLowerCase().includes(sender))) && CLAIM_VERB.test(s) && CLAIM_OUTCOME.test(s),
+  );
+  add("claims", "Does not claim results for the sender", claims.length === 0, claims.length ? `"${claims[0]}"` : undefined);
 
   const lower = text.toLowerCase();
   const banned = context.copy.bannedPhrases.filter((phrase) => phrase && lower.includes(phrase.toLowerCase()));

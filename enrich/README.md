@@ -75,7 +75,7 @@ cp .env.example .env
 docker compose -f infra/docker/docker-compose.yml up -d   # optional local MySQL instead
 pnpm install
 pnpm db:migrate
-pnpm db:seed      # demo client (dry run), prompt v1 and the superadmin; prints the webhook URLs
+pnpm db:seed      # prompt v1, the superadmin and, on an empty install, a demo client (dry run)
 pnpm dev          # web on http://localhost:3000 + worker
 
 pnpm sample:happierleads          # high-fit sample → dry_run_complete (ICP 100)
@@ -90,7 +90,7 @@ All apps and scripts read the single root `.env`; env is validated at startup (`
 | `pnpm db:generate` | Generate a migration from schema changes (`packages/db/src/schema`) |
 | `pnpm db:migrate` | Apply migrations |
 | `pnpm db:studio` | Drizzle Studio |
-| `pnpm db:seed` | Idempotent demo data and superadmin (re-run to change the admin password) |
+| `pnpm db:seed` | Idempotent: prompts and superadmin (re-run to change the admin password); the demo client only when no client exists, so a deleted demo stays deleted |
 | `pnpm sample:happierleads` | POST a sample payload to the local webhook: `high` (default), `low` or a JSON file path; `--fresh`, `--client <slug>` |
 | `pnpm typecheck` / `pnpm test` / `pnpm build` | Across all workspaces |
 
