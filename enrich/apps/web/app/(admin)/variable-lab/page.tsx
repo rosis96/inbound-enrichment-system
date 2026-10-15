@@ -38,12 +38,21 @@ export default async function VariableLabPage({ searchParams }: { searchParams: 
   const selected = allClients.find((c) => c.id === params.client) ?? allClients[0]!;
   const settings = parseClientSettings(selected.settings);
   const recent = await db
-    .select({ id: variableTests.id, domain: companies.domain, results: variableTests.results, createdAt: variableTests.createdAt, updatedAt: variableTests.updatedAt })
+    .select({
+      id: variableTests.id,
+      domain: companies.domain,
+      contact: variableTests.contact,
+      results: variableTests.results,
+      createdAt: variableTests.createdAt,
+      updatedAt: variableTests.updatedAt,
+    })
     .from(variableTests)
     .innerJoin(companies, eq(variableTests.companyId, companies.id))
     .where(eq(variableTests.clientId, selected.id))
     .orderBy(desc(variableTests.updatedAt))
     .limit(15);
+  // Prefill the form with the last prospect, so testing one variable from Settings is one click.
+  const last = recent[0];
   const missingContext = !settings.copy.companyDescription || settings.copy.services.length === 0;
 
   return (
@@ -63,18 +72,23 @@ export default async function VariableLabPage({ searchParams }: { searchParams: 
           <Card title="Prospect" description="The website is researched once (or reused if read in the last 30 days); every variable uses that research.">
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
               <div className="md:col-span-2">
-                <Field label="Website" hint="required">
-                  <input name="website" required placeholder="related.com" className="input font-mono" />
+                <Field label="Website" hint={last ? "required; filled from your last test" : "required"}>
+                  <input name="website" required defaultValue={last?.domain ?? ""} list="recent-sites" placeholder="related.com" className="input font-mono" />
+                  <datalist id="recent-sites">
+                    {[...new Set(recent.map((t) => t.domain))].map((domain) => (
+                      <option key={domain} value={domain} />
+                    ))}
+                  </datalist>
                 </Field>
               </div>
               <Field label="First name" hint="for {{firstName}}">
-                <input name="firstName" placeholder="Priya" className="input" />
+                <input name="firstName" defaultValue={last?.contact.firstName ?? ""} placeholder="Priya" className="input" />
               </Field>
               <Field label="Last name">
-                <input name="lastName" className="input" />
+                <input name="lastName" defaultValue={last?.contact.lastName ?? ""} className="input" />
               </Field>
               <Field label="Job title">
-                <input name="title" placeholder="VP Marketing" className="input" />
+                <input name="title" defaultValue={last?.contact.title ?? ""} placeholder="VP Marketing" className="input" />
               </Field>
             </div>
           </Card>

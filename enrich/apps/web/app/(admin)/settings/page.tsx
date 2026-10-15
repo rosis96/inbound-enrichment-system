@@ -293,7 +293,7 @@ export default async function SettingsPage({
                 <Icon name="beaker" className="size-4" /> Test enrichment
               </Link>
             </div>
-            <AiVariablesEditor name="aiVariables" initial={settings.aiVariables} />
+            <AiVariablesEditor name="aiVariables" initial={settings.aiVariables} clientId={client.id} />
           </Card>
 
           <Card

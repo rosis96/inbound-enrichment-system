@@ -114,8 +114,10 @@ function RulesLine({ variable }: { variable: AiVariableDraft }) {
   );
 }
 
-export function AiVariablesEditor({ name, initial }: { name: string; initial: AiVariableDraft[] }) {
+export function AiVariablesEditor({ name, initial, clientId }: { name: string; initial: AiVariableDraft[]; clientId?: string }) {
   const [variables, setVariables] = useState<AiVariableDraft[]>(initial);
+  // Saved versions by name, so "Test" is only offered for a variable whose edits are saved.
+  const [saved] = useState(() => new Map(initial.map((v) => [v.name, JSON.stringify(v)])));
   const update = (index: number, patch: Partial<AiVariableDraft>) =>
     setVariables((list) => list.map((v, i) => (i === index ? { ...v, ...patch } : v)));
   const remove = (index: number) => setVariables((list) => list.filter((_, i) => i !== index));
@@ -167,6 +169,23 @@ export function AiVariablesEditor({ name, initial }: { name: string; initial: Ai
                   {variable.name && <code className="hidden shrink-0 sm:inline">{`{{${variable.name}}}`}</code>}
                 </div>
               </label>
+              {clientId &&
+                (saved.get(variable.name) === JSON.stringify(variable) ? (
+                  <a
+                    href={`/variable-lab?client=${clientId}&variable=${encodeURIComponent(variable.name)}`}
+                    className="btn-secondary mt-5 shrink-0"
+                    title="Open the Variable lab with this variable selected"
+                  >
+                    <Icon name="beaker" className="size-4" /> Test
+                  </a>
+                ) : (
+                  <span
+                    className="btn-secondary mt-5 shrink-0 cursor-not-allowed opacity-50"
+                    title="The lab tests saved settings: save first, then test this variable"
+                  >
+                    <Icon name="beaker" className="size-4" /> Save to test
+                  </span>
+                ))}
               <button
                 type="button"
                 onClick={() => remove(index)}
