@@ -8,3 +8,4 @@ export * from "./personalise";
 export * from "./template";
 export * from "./sequence";
 export * from "./suppression";
+export * from "./variables";

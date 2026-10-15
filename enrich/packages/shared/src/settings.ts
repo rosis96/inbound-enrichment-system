@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { dependencyOrder } from "./variable-template";
 
 export const DEFAULT_FREE_EMAIL_DOMAINS = [
   "gmail.com",
@@ -56,6 +57,10 @@ export const CopySettings = z.object({
   senderName: z.string().default(""),
   companyDescription: z.string().default(""),
   offer: z.string().default(""),
+  // What the client can actually deliver, one per entry; the writer picks only the relevant ones.
+  services: stringList,
+  // Approved proof the writer may cite: case studies, research, figures. Nothing else is claimed.
+  proof: stringList,
   bannedPhrases: stringList,
   tone: z.string().default("friendly, concise, professional"),
   // Writes the client's AI variables for every lead before it is pushed.
@@ -103,12 +108,18 @@ export const INSTANTLY_SYSTEM_PLACEHOLDERS = [
 export const AiVariable = z
   .object({
     name: variableName,
-    instructions: z.string().trim().min(1).max(2000),
-    minWords: z.number().int().min(1).max(200).default(5),
-    maxWords: z.number().int().min(1).max(200).default(25),
+    // Plain instructions, or a template with {{placeholders}} (see variable-template.ts).
+    instructions: z.string().trim().min(1).max(5000),
+    minWords: z.number().int().min(1).max(300).default(5),
+    maxWords: z.number().int().min(1).max(300).default(25),
     // Hard character cap, e.g. 60 for subject lines.
-    maxChars: z.number().int().min(10).max(1000).optional(),
+    maxChars: z.number().int().min(10).max(2000).optional(),
     examples: z.array(z.string().trim().min(1)).max(10).default([]),
+    // Variables written first and handed to this one; {{name}} references in the instructions count too.
+    dependsOn: z.array(variableName).max(9).optional(),
+    // Exact sentence count and required opening; override the same rules written in the instructions.
+    sentences: z.number().int().min(1).max(10).optional(),
+    startsWith: z.string().trim().min(1).max(100).optional(),
   })
   .refine((v) => v.minWords <= v.maxWords, { message: "min words must be at most max words", path: ["minWords"] });
 export type AiVariable = z.output<typeof AiVariable>;
@@ -207,6 +218,19 @@ export const ClientSettings = z
     };
     check("aiVariables", settings.aiVariables.map((v) => v.name));
     check("customVariables", settings.customVariables.map((v) => v.name));
+
+    const aiNames = new Set(settings.aiVariables.map((v) => v.name));
+    settings.aiVariables.forEach((variable, index) => {
+      for (const dep of variable.dependsOn ?? []) {
+        const path = ["aiVariables", index, "dependsOn"];
+        if (dep === variable.name) ctx.addIssue({ code: "custom", path, message: "a variable cannot depend on itself" });
+        else if (!aiNames.has(dep)) ctx.addIssue({ code: "custom", path, message: `depends on unknown variable "${dep}"` });
+      }
+    });
+    const order = dependencyOrder(settings.aiVariables);
+    if (!order.ok) {
+      ctx.addIssue({ code: "custom", path: ["aiVariables"], message: `circular dependency: ${order.cycle.join(" → ")}` });
+    }
   });
 
 export type ClientSettings = z.output<typeof ClientSettings>;

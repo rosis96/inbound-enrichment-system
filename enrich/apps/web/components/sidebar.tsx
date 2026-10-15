@@ -10,6 +10,7 @@ const NAV: { href: string; label: string; icon: IconName }[] = [
   { href: "/dashboard", label: "Dashboard", icon: "dashboard" },
   { href: "/leads", label: "Leads", icon: "leads" },
   { href: "/test-lead", label: "Test lead", icon: "plus" },
+  { href: "/variable-lab", label: "Variable lab", icon: "beaker" },
   { href: "/events", label: "Webhook events", icon: "bolt" },
   { href: "/sequence", label: "Sequence", icon: "mail" },
   { href: "/clients", label: "Clients", icon: "clients" },

@@ -123,3 +123,32 @@ async function errorMessage(response: Response): Promise<string> {
     return `HTTP ${response.status}`;
   }
 }
+
+export type JsonCallResult =
+  | { ok: true; json: unknown; model: string; costUsd: number }
+  | { ok: false; code: string; transient: boolean; detail?: unknown };
+
+export interface JsonCallerOptions {
+  apiKey: string;
+  model: string;
+  priceInputPer1M: number;
+  priceOutputPer1M: number;
+  fetch?: typeof fetch;
+  timeoutMs?: number;
+}
+
+/** `completeJson` bound to a key, model and prices, in the shape the personalisation engine calls. */
+export function openAiJsonCaller(options: JsonCallerOptions): (prompt: string) => Promise<JsonCallResult> {
+  return async (prompt) => {
+    const { outcome } = await completeJson(options.apiKey, options.model, prompt, {
+      fetch: options.fetch,
+      timeoutMs: options.timeoutMs ?? 90_000,
+    });
+    if (outcome.kind !== "ok") {
+      return { ok: false, code: outcome.code, transient: outcome.kind === "transient", detail: { status: outcome.status, body: outcome.body } };
+    }
+    const { inputTokens, outputTokens } = outcome.usage;
+    const costUsd = (options.priceInputPer1M * inputTokens + options.priceOutputPer1M * outputTokens) / 1_000_000;
+    return { ok: true, json: outcome.json, model: outcome.model, costUsd };
+  };
+}

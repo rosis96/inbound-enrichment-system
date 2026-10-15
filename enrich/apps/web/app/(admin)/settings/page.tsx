@@ -4,6 +4,7 @@ import { getEnv } from "@enrich/shared/env";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { AiVariablesEditor } from "@/components/ai-variables-editor";
+import { Icon } from "@/components/icons";
 import { Alert, Card, EmptyState, PageHeader } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
 import { saveSettings } from "./actions";
@@ -84,7 +85,15 @@ export default async function SettingsPage({
 
   return (
     <>
-      <PageHeader title="Settings" description={`Configuration for ${client.name}. Changes apply to new leads.`} />
+      <PageHeader
+        title="Settings"
+        description={`Configuration for ${client.name}. Changes apply to new leads.`}
+        actions={
+          <Link href={`/variable-lab?client=${client.id}`} className="btn-primary" title="Try this client's saved AI variables on any website">
+            <Icon name="beaker" className="size-4" /> Test enrichment
+          </Link>
+        }
+      />
 
       {allClients.length > 1 && (
         <div className="mb-6 flex flex-wrap gap-1.5">
@@ -243,6 +252,20 @@ export default async function SettingsPage({
                   <textarea name="offer" defaultValue={settings.copy.offer} rows={3} className="input" />
                 </Field>
                 <ListField name="bannedPhrases" label="Banned phrases" values={settings.copy.bannedPhrases} />
+                <ListField
+                  name="services"
+                  label="Services the client can deliver"
+                  values={settings.copy.services}
+                  hint="one per line; the AI picks only the relevant ones for {{what we do}}"
+                />
+                <div className="md:col-span-2">
+                  <ListField
+                    name="proof"
+                    label="Approved proof"
+                    values={settings.copy.proof}
+                    hint="one per line: case studies, research and figures the AI may cite; nothing else is claimed"
+                  />
+                </div>
               </div>
             </div>
           </Card>
@@ -250,8 +273,26 @@ export default async function SettingsPage({
           <Card
             id="ai"
             title="AI variables"
-            description="Written by AI for every lead in one request, checked against these limits, and sent to Instantly as custom variables."
+            description={
+              <>
+                Written for every lead from one research plan of the prospect&apos;s website, in dependency order, checked against these rules
+                (corrected up to twice) and sent to Instantly as custom variables. Try them on any website in the{" "}
+                <Link href="/variable-lab" className="text-brand-600 hover:underline">
+                  Variable lab
+                </Link>
+                .
+              </>
+            }
           >
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-brand-100 bg-brand-50 px-4 py-3">
+              <p className="text-sm text-brand-700">
+                Test these variables on any website: see each output, its filled placeholders, sources and checks. Save first; the test uses the
+                saved settings.
+              </p>
+              <Link href={`/variable-lab?client=${client.id}`} className="btn-primary shrink-0">
+                <Icon name="beaker" className="size-4" /> Test enrichment
+              </Link>
+            </div>
             <AiVariablesEditor name="aiVariables" initial={settings.aiVariables} />
           </Card>
 

@@ -6,3 +6,16 @@ dist
 !.env.example
 next-env.d.ts
 *.tsbuildinfo
+
+# Client documents and data exports (never commit)
+*.doc
+*.docx
+*.pdf
+*.xls
+*.xlsx
+*.csv
+*.ppt
+*.pptx
+*.odt
+*.ods
+*.rtf

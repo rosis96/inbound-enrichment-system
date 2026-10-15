@@ -7,7 +7,7 @@ const MAX_HTML_BYTES = 1_500_000;
 const MAX_REDIRECTS = 5;
 
 /** Internal pages worth reading for sales research, best first. */
-const INTERESTING = ["about", "service", "solution", "product", "what-we", "who-we", "industr", "case", "customer", "client", "pricing", "work"];
+const INTERESTING = ["about", "service", "solution", "product", "what-we", "who-we", "project", "portfolio", "propert", "development", "industr", "case", "customer", "client", "pricing", "work"];
 /** Low-value pages never followed. */
 const SKIP = /(privacy|cookie|terms|legal|login|sign-?in|sign-?up|register|cart|checkout|careers|jobs|blog\/.+|news\/.+|\.(pdf|jpg|jpeg|png|gif|svg|zip|mp4)$)/i;
 
@@ -191,7 +191,7 @@ export async function crawlCompanySite(domain: string, options: CrawlOptions = {
   const pages: CrawledPage[] = [];
   if (home) {
     pages.push({ url: home.url.href, ...htmlToText(home.html) });
-    const links = interestingLinks(home.html, home.url, options.maxExtraPages ?? 3);
+    const links = interestingLinks(home.html, home.url, options.maxExtraPages ?? 4);
     const extra = await Promise.all(
       links.map(async (link) => {
         try {
@@ -229,7 +229,8 @@ export async function crawlCompanySite(domain: string, options: CrawlOptions = {
   for (const page of pages) {
     if (budget <= 200) break;
     const text = page.text.slice(0, page === pages[0] ? Math.min(budget, Math.ceil(maxChars * 0.5)) : budget);
-    parts.push(`## ${page.title || page.url}\n${text}`);
+    // The Source line lets facts found in the text be linked back to their page.
+    parts.push(`## ${page.title || page.url}\nSource: ${page.url}\n${text}`);
     budget -= text.length;
   }
   return { kind: "ok", source, pages, text: parts.join("\n\n") };

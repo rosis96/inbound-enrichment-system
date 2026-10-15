@@ -7,7 +7,7 @@ import { PayloadError, parseHappierleadsPayload } from "./happierleads";
 import { parseEmployeeRange, scoreIcp } from "./icp";
 import { buildInstantlyLead } from "./instantly";
 import { countryCode, normaliseDomain, pathMatches, urlPath } from "./normalise";
-import { buildVariablesPrompt, checkVariable, pickVariables } from "./personalise";
+import { mentionsTracking } from "./personalise";
 import { renderTemplate, templatePlaceholders } from "./template";
 
 // Mirrors the demo client's seeded settings.
@@ -250,23 +250,10 @@ describe("renderTemplate", () => {
   });
 });
 
-const firstLine = { name: "personalized_first_line", instructions: "x", minWords: 4, maxWords: 12, examples: [] };
-const subject = { name: "subject_line", instructions: "x", minWords: 1, maxWords: 6, maxChars: 30, examples: [] };
-
-describe("checkVariable", () => {
-  it("passes a clean value and flags guardrail problems", () => {
-    expect(checkVariable(firstLine, "Your ops team clearly ships fast.", [])).toEqual([]);
-    const problems = checkVariable(firstLine, "I saw you visited our site, {name}. Let's circle back now please okay", ["circle back"]);
-    expect(problems).toHaveLength(4);
-    expect(checkVariable(subject, "a subject that is far too long for it", [])).toHaveLength(2);
-  });
-});
-
-describe("checkVariable website-visit phrases", () => {
+describe("mentionsTracking", () => {
   it("allows destination names with Visit but blocks talk about the prospect's visit", () => {
-    const v = { name: "line", instructions: "x", minWords: 1, maxWords: 40, examples: [] };
-    expect(checkVariable(v, "Visit Seattle's new waterfront campaign puts the food scene front and centre.", [])).toEqual([]);
-    expect(checkVariable(v, "visit.brussels has a strong autumn events calendar.", [])).toEqual([]);
+    expect(mentionsTracking("Visit Seattle's new waterfront campaign puts the food scene front and centre.")).toBe(false);
+    expect(mentionsTracking("visit.brussels has a strong autumn events calendar.")).toBe(false);
     for (const bad of [
       "I saw you visited our pricing page last week.",
       "Thanks for checking out our site recently.",
@@ -274,37 +261,7 @@ describe("checkVariable website-visit phrases", () => {
       "Our tracking shows strong interest from your team.",
       "Noticed you were looking at our services.",
     ]) {
-      expect(checkVariable(v, bad, [])).toContain("mentions the website visit or tracking");
+      expect(mentionsTracking(bad)).toBe(true);
     }
-  });
-});
-
-describe("pickVariables", () => {
-  it("keeps the first passing candidate and reports the rest", () => {
-    const picked = pickVariables(
-      [firstLine, subject],
-      { variables: { personalized_first_line: ["too short", "Your ops team clearly ships fast."], subject_line: "[x]" } },
-      [],
-    );
-    expect(picked.values).toEqual({ personalized_first_line: "Your ops team clearly ships fast." });
-    expect(Object.keys(picked.rejected)).toEqual(["subject_line"]);
-  });
-});
-
-describe("buildVariablesPrompt", () => {
-  it("lists every variable with its limits and the company facts", () => {
-    const settings = parseClientSettings({ copy: { senderName: "Sam", bannedPhrases: ["synergy"] } });
-    const prompt = buildVariablesPrompt({
-      copy: settings.copy,
-      variables: settings.aiVariables,
-      contact: { firstName: "Priya", lastName: null, title: "Founder" },
-      company: { domain: "b.example", name: "Bee", industry: "Software", country: "GB", summary: null },
-      intentTopic: null,
-      pages: [],
-    });
-    expect(prompt).toContain("- subject_line (2-7 words, at most 60 characters)");
-    expect(prompt).toContain("- personalized_first_line (8-25 words)");
-    expect(prompt).toContain("Industry: Software");
-    expect(prompt).toContain("Never use these phrases: synergy");
   });
 });

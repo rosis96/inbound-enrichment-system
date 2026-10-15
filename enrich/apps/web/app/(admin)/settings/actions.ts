@@ -16,6 +16,14 @@ function list(formData: FormData, name: string): string[] {
     .filter(Boolean);
 }
 
+/** One entry per line only, for entries that may contain commas. */
+function lines(formData: FormData, name: string): string[] {
+  return String(formData.get(name) ?? "")
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 /** "name = value" per line; a line without "=" is kept with an empty name so validation reports it. */
 function customVariables(formData: FormData): { name: string; value: string }[] {
   return String(formData.get("customVariables") ?? "")
@@ -80,6 +88,8 @@ export async function saveSettings(formData: FormData): Promise<void> {
       companyDescription: text(formData, "companyDescription"),
       offer: text(formData, "offer"),
       bannedPhrases: list(formData, "bannedPhrases"),
+      services: lines(formData, "services"),
+      proof: lines(formData, "proof"),
     },
     aiVariables: aiVariables(formData),
     customVariables: customVariables(formData),
@@ -94,6 +104,7 @@ export async function saveSettings(formData: FormData): Promise<void> {
         if (issue.path[0] === "aiVariables" && typeof issue.path[1] === "number") {
           return `AI variable ${issue.path[1] + 1} ${String(issue.path[2] ?? "")}: ${issue.message}`;
         }
+        if (issue.path[0] === "aiVariables") return `AI variables: ${issue.message}`;
         return `${issue.path.join(".")}: ${issue.message}`;
       })
       .join("; ");

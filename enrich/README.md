@@ -15,7 +15,7 @@ POST /api/hooks/happierleads/:clientToken → raw_events → lead.normalise → 
 | gates | Own domain, free-email domain, suppressed domain, dedupe (same company `pushed`/`dry_run_complete` within `dedupeDays`); drops suppressed, free-email and email-less contacts | `gated_out` |
 | icp | 0–100 score, 20 points each for country, size, industry, title and high-intent pages, with a reason per factor; picks the best contact | `below_icp` (default `icp.minScore` is 80) |
 | research | Crawls the company website (homepage plus up to 3 same-site about/services/product/customer pages; Firecrawl fallback when the homepage has under 400 characters of text and `FIRECRAWL_API_KEY` is set; private and internal addresses are refused), keeps up to 12,000 characters in `companies.crawl_text`, then summarises it with the active `company_summary` prompt into `companies.summary`. Shared across clients and reused for 30 days. Never blocks the lead: failures are recorded and the lead moves on | `researched` data on the company; the lead goes to personalise either way |
-| personalise | Writes the client's AI variables (`aiVariables` in settings, default `subject_line` and `personalized_first_line`) in one OpenAI JSON-mode request with `OPENAI_MODEL`, two candidates each; keeps the first candidate that passes its word/character limits, banned phrases, no brackets and no mention of the visit. Stored in `contacts.ai_variables`. Skipped when `copy.aiVariablesEnabled` is off or OpenAI is not configured | `personalised`; missing variables are left out and the lead still goes to push, unless `copy.requireAiVariables` is on (then `failed`) |
+| personalise | Writes the client's AI variables (`aiVariables` in settings) with `packages/core/src/variables.ts`: one planner call builds a research plan from the crawled website (category, industry, specific details with quotes and source pages, relevant client services, possible challenges, benefits, unknowns), then the variables are written in dependency order, one call per layer, validated and corrected up to twice with the same research. Stored in `contacts.ai_variables`; the plan, checks and attempts are on the step. Skipped when `copy.aiVariablesEnabled` is off or OpenAI is not configured | `personalised`; variables that never pass are left out and the lead still goes to push, unless `copy.requireAiVariables` is on (then `failed`) |
 | push | `POST https://api.instantly.ai/api/v2/leads` with `skip_if_in_workspace: true` and string-only `custom_variables` (lead built-ins, the AI variables, and the client's custom variables rendered with `{{name|fallback}}`). In dry run (`GLOBAL_DRY_RUN` or the client's switch) the request is saved instead of sent | `dry_run_complete`, `pushed`, `no_contact` or `failed` (401, 402, other 4xx, no campaign, no API key; 429, 5xx and network errors are retried 3 times first) |
 
 Jobs live in the `jobs` table (`packages/db/src/queue.ts`): workers claim them with an atomic
@@ -31,10 +31,15 @@ Admin UI at http://localhost:3000, login with `ADMIN_EMAIL` / `ADMIN_PASSWORD`:
 - **Clients**: webhook URLs
 - **Dashboard**: lead counts, leads per day, status breakdown, worker/queue health, AI spend, per-client totals
 - **Settings**: ICP lists, threshold, high-intent pages, campaign ID, dry run, Instantly API key (stored encrypted), email copy
-  (sender, offer, tone, banned phrases), AI variables (name, instructions, word/character limits, examples) and custom
-  variables (`name = value` per line)
+  (sender, offer, tone, banned phrases, the services the client delivers and the proof it may cite), AI variables (name,
+  instructions, word/character limits, exact sentences, required opening, "written after" dependencies, examples) and
+  custom variables (`name = value` per line)
 - **Suppression**: per-client do-not-contact domains and emails (customer, open deal, competitor, …), added by pasting or CSV, with optional expiry; checked by the gates step
 - **Test lead**: run any website and contact through the real pipeline, optionally without pushing, skipping the duplicate check, or re-reading the website
+- **Variable lab**: run a client's AI variables against any website without creating a lead. Shows each output with the
+  resolved placeholders, the shared research plan, source links and every check; regenerate one variable (plus those
+  that depend on it), edit its instructions in place (saved to the client's settings), rewrite all with the same plan,
+  re-plan from the stored website text, or re-read the website. Tests are kept in `variable_tests`
 - **Webhook events**: every Happierleads payload as received, with errors and a Reprocess button
 - **Integrations**: OpenAI API key (encrypted), model and token prices, and an optional Firecrawl key, shared by all
   clients and stored in `app_settings`. Each value saved here overrides `.env`; blank values fall back to `.env`. **Test key**
@@ -103,3 +108,39 @@ Assumptions to verify are marked `// ASSUMPTION:` in code and listed here.
 - Timestamps are DATETIME(3) in UTC, set by the app (not `NOW()`), so the database server's time zone does not matter.
 - JSON columns use a custom type that parses strings, because MariaDB stores JSON as LONGTEXT.
 - One campaign ID per client in the UI (`campaigns.default`); per-intent campaigns exist in the settings schema but have no UI yet.
+
+## AI variables: placeholders, rules and limits
+
+Instructions can be plain text or a template. Inside `{{ }}` (parsed in `packages/shared/src/variable-template.ts`):
+
+- **Lead data**: `{{firstName}}`, `{{lastName}}`, `{{fullName}}`, `{{companyName}}`, `{{website}}`, `{{domain}}`, `{{jobTitle}}`,
+  `{{country}}`, `{{email}}`, with an optional fallback (`{{firstName|there}}`). Filled from the lead. Instantly's sending-account
+  fields (`{{accountSignature}}`, `{{sendingAccountFirstName}}`, …) are kept as is for mail merge.
+- **Another variable**: `{{value_proposition}}`. Makes this variable wait for that one and receive its finished text.
+  "Written after" in Settings adds the same dependency without a placeholder; cycles are rejected on save.
+- **Anything else is an instruction** the AI resolves from the research plan and the client's context, e.g.
+  `{{companycategory}}`, `{{what we do}}`, `{{2-3 challenges}}`, `{{a named project and why it matters}}`. `{{industry}}` is in
+  this group, so it is the AI's broader industry, not the raw Happierleads field.
+
+Rules written in the instructions are read and checked: "exactly two sentences", "maximum of 85 words" / "under 40 words" /
+"20-30 words", "no more than 200 characters", "Start with 'By the way,'", "Sentence two must start with 'And, I have
+seen'", "Do not include a CTA". Word limits in the instructions win over the word fields; the "Exact sentences" and
+"Must start with" fields win over the instructions. Every output is also checked for unresolved placeholders, brackets,
+banned phrases, mentions of the visit, figures that are not in the website text or the approved proof, and cited details
+that were not verified. Possibly unsupported names, missing personalisation and a detail reused by an unrelated
+variable are shown as warnings.
+
+Limitations:
+
+- Facts are limited to what the crawler reads: the homepage plus up to 4 about/services/project/portfolio pages
+  (12,000 characters). A project that only appears on deeper pages or in JavaScript-rendered content (without Firecrawl)
+  is not found, and the writer stays general instead of naming it.
+- Detail verification is textual: the quote or name must appear in the crawled text. It proves the site mentions it,
+  not that every word the writer adds about it is correct. The "unsupported names" check is a heuristic and only warns.
+- Challenges and benefits are interpretation by design; the prompt and the plan keep them apart from facts, but tone
+  is not machine-checkable.
+- Sentence counting uses punctuation and handles common abbreviations; unusual punctuation can miscount.
+- Each lead costs one planner call plus one writer call per dependency layer, plus up to two correction calls. Lab
+  costs are shown on the test but are not included in the dashboard's AI spend.
+- Crawls stored before page URLs were kept have no sources; the lab re-reads such sites, the pipeline uses them as they are
+  until the 30-day cache expires.

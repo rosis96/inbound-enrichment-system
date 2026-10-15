@@ -14,7 +14,8 @@
     "db:migrate": "tsx src/scripts/migrate.ts",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx src/scripts/seed.ts",
-    "sample:happierleads": "tsx src/scripts/send-sample.ts"
+    "sample:happierleads": "tsx src/scripts/send-sample.ts",
+    "client:resonance": "tsx src/scripts/clients/resonance.ts"
   },
   "dependencies": {
     "@enrich/shared": "workspace:*",
