@@ -1,4 +1,5 @@
 import { asc, clients, companies, contacts, eq, enrichmentSteps, getDb, leads, rawEvents } from "@enrich/db";
+import { SHOW_ICP } from "@/lib/features";
 import { testLeadFlags, type LeadStatus } from "@enrich/shared";
 import { getEnv } from "@enrich/shared/env";
 import Link from "next/link";
@@ -114,7 +115,8 @@ export default async function LeadPage({
         )}
         {lead.skipReason && <Alert tone={lead.status === "failed" ? "error" : "warning"}>{lead.skipReason}</Alert>}
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className={`grid grid-cols-1 gap-4 ${SHOW_ICP ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+          {SHOW_ICP && (
           <div className="card p-4">
             <div className="text-sm font-medium text-slate-500">ICP score</div>
             <div className="mt-2 text-3xl font-semibold tabular-nums">{score ?? "–"}</div>
@@ -122,6 +124,7 @@ export default async function LeadPage({
               <div className="h-full rounded-full bg-brand-500" style={{ width: `${score ?? 0}%` }} />
             </div>
           </div>
+          )}
           <div className="card p-4">
             <div className="text-sm font-medium text-slate-500">Intent</div>
             <div className="mt-2 text-3xl font-semibold capitalize">{lead.intentLevel ?? "–"}</div>
@@ -178,6 +181,7 @@ export default async function LeadPage({
               )}
             </Card>
 
+            {SHOW_ICP && (
             <Card title="ICP reasons">
               {lead.icpReasons ? (
                 <ul className="space-y-3">
@@ -203,6 +207,7 @@ export default async function LeadPage({
                 <p className="text-sm text-slate-500">Not scored (lead stopped before the ICP step).</p>
               )}
             </Card>
+            )}
 
             <Card title="Contacts">
               {leadContacts.length === 0 ? (

@@ -1,4 +1,5 @@
 import { asc, clients, getDb } from "@enrich/db";
+import { SHOW_ICP } from "@/lib/features";
 import { parseClientSettings } from "@enrich/shared";
 import { getEnv } from "@enrich/shared/env";
 import Link from "next/link";
@@ -62,7 +63,7 @@ export default async function TestLeadPage({ searchParams }: { searchParams: Pro
     <>
       <PageHeader
         title="Test lead"
-        description="Send a company through the enricher as if Happierleads had found it: filters, ICP, website research, AI variables and Instantly."
+        description="Send a company through the enricher as if Happierleads had found it: filters, website research, AI variables and Instantly."
       />
       {params.error && (
         <div className="mb-6">
@@ -72,7 +73,7 @@ export default async function TestLeadPage({ searchParams }: { searchParams: Pro
 
       <form action={sendTestLead} className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="min-w-0 space-y-6">
-          <Card title="Company" description="Only the website is required; the rest feeds the filters and ICP score.">
+          <Card title="Company" description="Only the website is required; the rest feeds the filters and the AI variables.">
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
               <div className="md:col-span-2">
                 <Field label="Website" hint="required">
@@ -82,7 +83,7 @@ export default async function TestLeadPage({ searchParams }: { searchParams: Pro
               <Field label="Company name">
                 <input name="companyName" placeholder="Basecamp" className="input" />
               </Field>
-              <Field label="Industry" hint={settings.icp.industriesInclude.length ? `ICP: ${settings.icp.industriesInclude.join(", ")}` : undefined}>
+              <Field label="Industry" hint={SHOW_ICP && settings.icp.industriesInclude.length ? `ICP: ${settings.icp.industriesInclude.join(", ")}` : undefined}>
                 <input name="industry" list="icp-industries" placeholder="Software" className="input" />
                 <datalist id="icp-industries">
                   {settings.icp.industriesInclude.map((i) => (
@@ -90,7 +91,7 @@ export default async function TestLeadPage({ searchParams }: { searchParams: Pro
                   ))}
                 </datalist>
               </Field>
-              <Field label="Employees" hint={settings.icp.employeeRanges.length ? `ICP: ${settings.icp.employeeRanges.join(", ")}` : undefined}>
+              <Field label="Employees" hint={SHOW_ICP && settings.icp.employeeRanges.length ? `ICP: ${settings.icp.employeeRanges.join(", ")}` : undefined}>
                 <select name="employees" defaultValue={settings.icp.employeeRanges[0] ?? ""} className="input">
                   <option value="">Unknown</option>
                   {EMPLOYEES.map((e) => (
@@ -103,7 +104,7 @@ export default async function TestLeadPage({ searchParams }: { searchParams: Pro
               <Field label="Revenue">
                 <input name="revenue" placeholder="$1M-$10M" className="input" />
               </Field>
-              <Field label="Country" hint={settings.icp.countries.length ? `ICP: ${settings.icp.countries.join(", ")}` : "name or ISO code"}>
+              <Field label="Country" hint={SHOW_ICP && settings.icp.countries.length ? `ICP: ${settings.icp.countries.join(", ")}` : "name or ISO code"}>
                 <input name="country" defaultValue={settings.icp.countries[0] ?? ""} placeholder="United Kingdom" className="input" />
               </Field>
               <Field label="City">
@@ -120,7 +121,7 @@ export default async function TestLeadPage({ searchParams }: { searchParams: Pro
               <Field label="Last name">
                 <input name="lastName" placeholder="Shah" className="input" />
               </Field>
-              <Field label="Job title" hint={settings.icp.titleKeywords.length ? `ICP: ${settings.icp.titleKeywords.join(", ")}` : undefined}>
+              <Field label="Job title" hint={SHOW_ICP && settings.icp.titleKeywords.length ? `ICP: ${settings.icp.titleKeywords.join(", ")}` : undefined}>
                 <input name="title" placeholder="Founder" className="input" />
               </Field>
               <Field label="Email">
@@ -129,7 +130,7 @@ export default async function TestLeadPage({ searchParams }: { searchParams: Pro
             </div>
           </Card>
 
-          <Card title="Visit" description="Pages the company looked at on your client's site. High-intent pages raise the ICP score and set the topic.">
+          <Card title="Visit" description="Pages the company looked at on your client's site. High-intent pages set the intent and topic.">
             <Field label="Pages visited" hint="one path per line">
               <textarea
                 name="pages"
@@ -146,7 +147,7 @@ export default async function TestLeadPage({ searchParams }: { searchParams: Pro
         <div className="space-y-6">
           <Card title="Send to">
             <div className="space-y-5">
-              <Field label="Client" hint="uses its ICP, variables and campaign">
+              <Field label="Client" hint="uses its variables and campaign">
                 <select name="clientId" defaultValue={selected.id} className="input">
                   {allClients.map((c) => (
                     <option key={c.id} value={c.id}>

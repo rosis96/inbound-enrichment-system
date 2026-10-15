@@ -7,6 +7,7 @@ import { AiVariablesEditor } from "@/components/ai-variables-editor";
 import { Icon } from "@/components/icons";
 import { Alert, Card, EmptyState, PageHeader } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
+import { SHOW_CUSTOM_VARIABLES, SHOW_ICP } from "@/lib/features";
 import { saveSettings } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +18,7 @@ const SECTIONS = [
   { id: "copy", label: "Email copy" },
   { id: "ai", label: "AI variables" },
   { id: "variables", label: "Custom variables" },
-] as const;
+].filter((s) => (s.id !== "icp" || SHOW_ICP) && (s.id !== "variables" || SHOW_CUSTOM_VARIABLES));
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
@@ -108,7 +109,7 @@ export default async function SettingsPage({
       <div className="mb-6 space-y-3 empty:hidden">
         {params.created && (
           <Alert tone="success">
-            Client added in dry run. Set its ICP, campaign and Instantly API key below; its webhook URL is on the Clients page.
+            Client added in dry run. Set its campaign and Instantly API key below; its webhook URL is on the Clients page.
           </Alert>
         )}
         {params.saved && <Alert tone="success">Saved. New leads use these settings; use Reprocess on a lead to re-score it.</Alert>}
@@ -169,6 +170,7 @@ export default async function SettingsPage({
             </div>
           </Card>
 
+          <div hidden={!SHOW_ICP}>
           <Card id="icp" title="Ideal customer profile" description="Each factor is worth 20 points; leads below the minimum stop as below_icp.">
             <div className="space-y-5">
               <Field label="Minimum score" hint="0–100">
@@ -209,6 +211,8 @@ export default async function SettingsPage({
               </div>
             </div>
           </Card>
+
+          </div>
 
           <Card
             id="copy"
@@ -296,6 +300,7 @@ export default async function SettingsPage({
             <AiVariablesEditor name="aiVariables" initial={settings.aiVariables} clientId={client.id} />
           </Card>
 
+          <div hidden={!SHOW_CUSTOM_VARIABLES}>
           <Card
             id="variables"
             title="Custom variables"
@@ -329,6 +334,7 @@ export default async function SettingsPage({
               </div>
             </div>
           </Card>
+          </div>
 
           <div className="sticky bottom-4 z-10 flex items-center justify-end gap-3 rounded-xl border border-slate-200 bg-white/90 px-4 py-3 shadow-lg backdrop-blur">
             <span className="mr-auto text-xs text-slate-500">Editing {client.name}</span>

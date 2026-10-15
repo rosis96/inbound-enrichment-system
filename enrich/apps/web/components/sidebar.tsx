@@ -4,14 +4,15 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { logout } from "@/app/login/actions";
+import { SHOW_TEST_LEAD, SHOW_WEBHOOK_EVENTS } from "@/lib/features";
 import { Icon, type IconName } from "./icons";
 
 const NAV: { href: string; label: string; icon: IconName }[] = [
   { href: "/dashboard", label: "Dashboard", icon: "dashboard" },
   { href: "/leads", label: "Leads", icon: "leads" },
-  { href: "/test-lead", label: "Test lead", icon: "plus" },
+  ...(SHOW_TEST_LEAD ? [{ href: "/test-lead", label: "Test lead", icon: "plus" as const }] : []),
   { href: "/variable-lab", label: "Variable lab", icon: "beaker" },
-  { href: "/events", label: "Webhook events", icon: "bolt" },
+  ...(SHOW_WEBHOOK_EVENTS ? [{ href: "/events", label: "Webhook events", icon: "bolt" as const }] : []),
   { href: "/sequence", label: "Sequence", icon: "mail" },
   { href: "/clients", label: "Clients", icon: "clients" },
   { href: "/suppression", label: "Suppression", icon: "shield" },

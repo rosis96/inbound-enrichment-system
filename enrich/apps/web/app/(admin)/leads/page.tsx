@@ -1,4 +1,5 @@
 import { and, asc, clients, companies, contacts, desc, eq, getDb, leads, like, or, type SQL } from "@enrich/db";
+import { SHOW_ICP } from "@/lib/features";
 import { LEAD_STATUSES, type LeadStatus } from "@enrich/shared";
 import Link from "next/link";
 import { StatusBadge, statusLabel } from "@/components/status-badge";
@@ -105,7 +106,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
             <tr>
               <th>Company</th>
               <th>Status</th>
-              <th className="text-right">ICP</th>
+              {SHOW_ICP && <th className="text-right">ICP</th>}
               <th>Intent</th>
               <th>Contact</th>
               <th>Client</th>
@@ -115,7 +116,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={7}>
+                <td colSpan={SHOW_ICP ? 7 : 6}>
                   {filtering ? (
                     <EmptyState title="No leads match these filters" />
                   ) : (
@@ -138,7 +139,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                   <StatusBadge status={row.status} />
                   {row.skipReason && <div className="mt-1 max-w-56 truncate text-xs text-slate-500" title={row.skipReason}>{row.skipReason}</div>}
                 </td>
-                <td className="text-right font-mono tabular-nums">{row.score ?? "–"}</td>
+                {SHOW_ICP && <td className="text-right font-mono tabular-nums">{row.score ?? "–"}</td>}
                 <td className="text-slate-600">
                   <span className="capitalize">{row.intentLevel ?? "–"}</span>
                   {row.intentTopic && <div className="text-xs text-slate-500">{row.intentTopic}</div>}

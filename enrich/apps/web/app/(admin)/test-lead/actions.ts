@@ -1,6 +1,7 @@
 "use server";
 
 import { clients, eq, getDb, leads, rawEvents } from "@enrich/db";
+import { SHOW_WEBHOOK_EVENTS } from "@/lib/features";
 import { TEST_PAYLOAD_KEY, type TestLeadFlags } from "@enrich/shared";
 import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
@@ -86,5 +87,5 @@ export async function sendTestLead(formData: FormData): Promise<void> {
     if (lead) redirect(`/leads/${lead.id}?test=1`);
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
-  redirect(`/events?client=${client.id}`);
+  redirect(SHOW_WEBHOOK_EVENTS ? `/events?client=${client.id}` : `/leads?client=${client.id}`);
 }

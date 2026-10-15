@@ -1,6 +1,6 @@
 "use server";
 
-import { clients, eq, getDb, leads } from "@enrich/db";
+import { and, clients, eq, getDb, leads, rawEvents } from "@enrich/db";
 import { ClientSettings } from "@enrich/shared";
 import { generateToken } from "@enrich/shared/crypto";
 import { randomUUID } from "node:crypto";
@@ -85,4 +85,28 @@ export async function deleteClient(formData: FormData): Promise<void> {
 
   revalidatePath("/clients");
   redirect(`/clients?deleted=${encodeURIComponent(client.name)}`);
+}
+
+/**
+ * Permanently deletes a client's leads with their contacts, pipeline steps and Happierleads webhook events.
+ * The client, its settings, suppression list and lab tests stay. The client's name must be typed to confirm.
+ */
+export async function deleteClientLeads(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const id = String(formData.get("clientId") ?? "");
+  const confirm = String(formData.get("confirm") ?? "").trim();
+  const db = getDb();
+  const [client] = await db.select({ id: clients.id, name: clients.name }).from(clients).where(eq(clients.id, id));
+  if (!client) fail("Client not found");
+  if (confirm !== client.name) fail(`Type "${client.name}" exactly to delete its leads`);
+
+  await db.transaction(async (tx) => {
+    // Leads first: they point at the webhook events without a cascade.
+    await tx.delete(leads).where(eq(leads.clientId, client.id));
+    await tx.delete(rawEvents).where(and(eq(rawEvents.clientId, client.id), eq(rawEvents.source, "happierleads")));
+  });
+
+  revalidatePath("/clients");
+  revalidatePath("/leads");
+  redirect(`/clients?leadsDeleted=${encodeURIComponent(client.name)}`);
 }
