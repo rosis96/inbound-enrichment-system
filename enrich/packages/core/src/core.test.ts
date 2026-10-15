@@ -2,6 +2,8 @@ import { parseClientSettings } from "@enrich/shared";
 import { describe, expect, it } from "vitest";
 import high from "../../../scripts/samples/happierleads-high.json";
 import low from "../../../scripts/samples/happierleads-low.json";
+import real from "../../../scripts/samples/happierleads-real.json";
+import wrapped from "../../../scripts/samples/happierleads-lead.json";
 import { evaluateGates, type GateInput } from "./gates";
 import { PayloadError, parseHappierleadsPayload } from "./happierleads";
 import { parseEmployeeRange, scoreIcp } from "./icp";
@@ -93,6 +95,35 @@ describe("parseHappierleadsPayload", () => {
     expect(visit.pages).toEqual([]);
     expect(visit.visitedAt).toBeInstanceOf(Date);
     expect(visit.contacts[0]).toMatchObject({ firstName: "Ada", lastName: "Lovelace", email: "ada@acme.example" });
+  });
+
+  it("parses a real Happierleads webhook", () => {
+    const visit = parseHappierleadsPayload(real);
+    expect(visit.company).toMatchObject({
+      domain: "ibm-test-company.com",
+      name: "international business machines corporation",
+      industry: "Internet Software & Services",
+      country: "US",
+      linkedinUrl: "https://www.linkedin.com/company/ibm",
+    });
+    expect(visit.pages.map((p) => p.path)).toEqual(["/", "/pricing"]);
+    expect(visit.referrer).toBe("google.com");
+    expect(visit.contacts.map((c) => c.email)).toEqual(["niclas.osterling@test.com", "johndoe@gmail.com", "allisterdelle@gmail.com"]);
+    expect(visit.contacts[0]).toMatchObject({ firstName: "Niclas", title: "Owner", seniority: "owner" });
+  });
+
+  it("parses a Happierleads webhook wrapped in `lead`", () => {
+    const visit = parseHappierleadsPayload(wrapped);
+    expect(visit.company).toMatchObject({
+      domain: "example-beach.gov",
+      name: "City of Example Beach",
+      industry: "Government Administration",
+      employeeRange: "100-1000",
+      country: "US",
+    });
+    expect(visit.company.linkedinUrl).toBeUndefined();
+    // The personal email belongs to another organisation, so only the business email is used.
+    expect(visit.contacts).toEqual([expect.objectContaining({ firstName: "Sam", title: "City Manager", email: "srivera@example-beach.gov" })]);
   });
 
   it("rejects payloads without a domain", () => {

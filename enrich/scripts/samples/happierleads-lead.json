@@ -1,0 +1,71 @@
+{
+  "lead": {
+    "domain": "example-beach.gov",
+    "company": {
+      "url": "http://www.example-beach.gov",
+      "name": "City of Example Beach",
+      "domain": "example-beach.gov",
+      "type": "government",
+      "geo": {
+        "lat": null,
+        "lng": null,
+        "raw": null,
+        "city": "Example Beach",
+        "state": "Virginia",
+        "country": "United States",
+        "stateCode": null,
+        "postalCode": null,
+        "streetName": null,
+        "subPremise": null,
+        "countryCode": "US",
+        "streetNumber": null
+      },
+      "category": {
+        "sector": "Industrials",
+        "sicCode": null,
+        "industry": "Government Administration",
+        "naicsCode": "56",
+        "subIndustry": null,
+        "industryGroup": null
+      },
+      "metrics": {
+        "raised": null,
+        "employees": "82",
+        "marketCap": null,
+        "alexaUsRank": "138660",
+        "annualRevenue": null,
+        "fiscalYearEnd": null,
+        "employeesRange": "100-1000",
+        "alexaGlobalRank": "138660",
+        "revenueLowerBound": 1000000001,
+        "revenueUpperBound": 1000000001,
+        "employeesLowerBound": 82,
+        "employeesUpperBound": 82,
+        "estimatedAnnualRevenue": "$1.0B-$1.0B"
+      },
+      "linkedin": {
+        "logo": null,
+        "name": null,
+        "handle": "company/",
+        "tagline": null,
+        "companyId": null,
+        "followers": null,
+        "industries": [],
+        "staffCount": null,
+        "description": null,
+        "locationCountry": null
+      },
+      "location": "Example Beach, VA, USA",
+      "description": "A coastal city government."
+    },
+    "contact": {
+      "phone": null,
+      "lastName": "Rivera",
+      "linkedin": "https://linkedin.com/in/example",
+      "position": "City Manager",
+      "firstName": "Sam",
+      "businessEmail": "srivera@example-beach.gov",
+      "personalEmail": "sam.rivera@other-city.gov"
+    }
+  }
+}

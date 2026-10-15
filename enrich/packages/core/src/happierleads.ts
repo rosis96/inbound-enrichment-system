@@ -77,7 +77,8 @@ function parseDate(value: string | undefined): Date | undefined {
 
 export function parseHappierleadsPayload(payload: unknown): ParsedVisit {
   const root = asObj(payload);
-  const data = isObj(root.data) ? root.data : root; // ASSUMPTION: may be wrapped in `data`
+  // Happierleads wraps its webhook in `lead`; `data` is kept for other senders.
+  const data = isObj(root.lead) ? root.lead : isObj(root.data) ? root.data : root;
   const company = isObj(data.company) ? data.company : data; // ASSUMPTION: company fields nested or flat
 
   const domain = normaliseDomain(
@@ -100,23 +101,29 @@ export function parseHappierleadsPayload(payload: unknown): ParsedVisit {
       str(company, "country", "countryCode", "country_code", "location.country", "location.countryCode", "geo.country", "geo.countryCode") ??
         str(sessionObj, "country", "location.country"),
     ),
-    linkedinUrl: str(company, "linkedin", "linkedinUrl", "linkedin_url", "socials.linkedin", "linkedin.handle"),
+    linkedinUrl: linkedinUrl(str(company, "linkedin", "linkedinUrl", "linkedin_url", "socials.linkedin", "linkedin.handle", "linkedinPage")),
   };
 
   const pages = firstArray(sessionObj, "pages", "pageViews", "page_views", "visitedPages", "urls")
-    .concat(firstArray(data, "pages", "pageViews", "visitedPages"))
+    .concat(firstArray(data, "pages", "pageViews", "visitedPages", "pageVisits"))
     .map(parsePage)
     .filter((page): page is LeadPage => page !== undefined);
 
-  const contacts = firstArray(data, "contacts", "people", "employees", "company.contacts")
-    .concat(data === company ? [] : firstArray(company, "contacts"))
+  // Happierleads sends the identified visitor as `contact`, with more people under its `additionalContacts` and `listContacts`.
+  const visitor = isObj(data.contact) ? data.contact : undefined;
+  const rawContacts: unknown[] = [
+    ...(visitor ? [visitor, ...firstArray(visitor, "additionalContacts"), ...firstArray(visitor, "listContacts")] : []),
+    ...firstArray(data, "contacts", "people", "employees", "company.contacts"),
+    ...(data === company ? [] : firstArray(company, "contacts")),
+  ];
+  const contacts = rawContacts
     .map(parseContact)
     .filter((contact): contact is ParsedContact => contact !== undefined);
 
   return {
     company: parsedCompany,
     visitedAt: parseDate(
-      str(data, "createdAt", "created_at", "visitedAt", "visited_at", "timestamp") ??
+      str(data, "createdAt", "created_at", "visitedAt", "visited_at", "timestamp", "summary.lastSession.date") ??
         str(sessionObj, "createdAt", "startedAt", "start", "timestamp"),
     ),
     pages: dedupePages(pages),
@@ -124,6 +131,20 @@ export function parseHappierleadsPayload(payload: unknown): ParsedVisit {
     session,
     contacts,
   };
+}
+
+function seniority(title: string | undefined, label: string | undefined): string | undefined {
+  const fromTitle = title ? seniorityFromTitle(title) : undefined;
+  if (fromTitle && fromTitle !== "ic") return fromTitle;
+  const fromLabel = label ? seniorityFromTitle(label.replace(/[-_]/g, " ").replace(/\bc level\b/i, "chief")) : undefined;
+  return fromLabel && fromLabel !== "ic" ? fromLabel : (fromTitle ?? fromLabel);
+}
+
+/** "company/ibm" → "https://www.linkedin.com/company/ibm"; a bare "company/" is dropped. */
+function linkedinUrl(value: string | undefined): string | undefined {
+  if (!value || /^https?:\/\//i.test(value)) return value;
+  if (/^\/*(company|in|school)\/*$/i.test(value)) return undefined;
+  return `https://www.linkedin.com/${value.replace(/^\/+/, "")}`;
 }
 
 function parsePage(value: unknown): LeadPage | undefined {
@@ -167,9 +188,10 @@ function parseContact(value: unknown): ParsedContact | undefined {
     lastName,
     fullName,
     title,
-    seniority: str(raw, "seniority") ?? (title ? seniorityFromTitle(title) : undefined),
-    linkedinUrl: str(raw, "linkedin", "linkedinUrl", "linkedin_url", "socials.linkedin"),
-    email: normaliseEmail(str(raw, "email", "emailAddress", "email_address", "emails", "workEmail")),
+    // The title decides when it says anything; a sender's own label ("Director") is only a fallback, mapped to our buckets.
+    seniority: seniority(title, str(raw, "seniority")),
+    linkedinUrl: linkedinUrl(str(raw, "linkedin", "linkedinUrl", "linkedin_url", "socials.linkedin")),
+    email: normaliseEmail(str(raw, "email", "businessEmail", "emailAddress", "email_address", "emails", "workEmail")),
   };
   return contact.email || contact.fullName || contact.title ? contact : undefined;
 }

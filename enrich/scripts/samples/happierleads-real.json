@@ -1,0 +1,197 @@
+{
+  "ip": "104.220.8.16",
+  "utm": {
+    "term": "b2b leads software",
+    "medium": "cpc",
+    "source": "google",
+    "content": "ad-variant-a",
+    "campaign": "summer-sale-2024"
+  },
+  "topic": "",
+  "leadId": "test-lead-id-123456789",
+  "scores": [
+    {
+      "score": 5,
+      "reason": "Large enterprise with 310,000+ employees",
+      "category": "Company Size",
+      "fitScoreRatio": 85
+    },
+    {
+      "score": 4,
+      "reason": "Technology sector aligns with target ICP",
+      "category": "Industry Match",
+      "fitScoreRatio": 85
+    }
+  ],
+  "company": {
+    "city": "Armonk",
+    "name": "international business machines corporation",
+    "site": {
+      "h1": "Let’s create something that will change everything",
+      "title": "IBM - United States",
+      "phoneNumbers": [
+        "+1 914-499-1900"
+      ],
+      "emailAddresses": [
+        "contact@ibm.com"
+      ],
+      "firstParagraph": "IBM helps clients modernize with hybrid cloud and AI across 175 countries.",
+      "metaDescription": "IBM is a leading hybrid cloud and AI company."
+    },
+    "tags": [
+      "B2B",
+      "Enterprise"
+    ],
+    "tech": [
+      "Watson",
+      "Red Hat OpenShift"
+    ],
+    "phone": "+1 914-499-1900",
+    "state": "Tennessee",
+    "domain": "ibm-test-company.com",
+    "sector": "Information Technology",
+    "ticker": "IBM",
+    "aiBrief": {
+      "summary": "IBM provides hybrid cloud infrastructure, AI software and consulting to large enterprises.",
+      "keywords": [
+        "hybrid cloud",
+        "AI",
+        "enterprise software",
+        "consulting"
+      ],
+      "companyType": "B2B",
+      "whoTheySellTo": "CIOs and IT leaders at large enterprises modernizing infrastructure.",
+      "valueProposition": "Enterprise-grade reliability combined with open hybrid-cloud flexibility.",
+      "productsAndServices": [
+        "Hybrid cloud platform",
+        "Watson AI",
+        "Consulting services",
+        "Mainframe systems"
+      ]
+    },
+    "country": "United States",
+    "sicCode": "7372",
+    "industry": "Internet Software & Services",
+    "timeZone": "America/New_York",
+    "alexaRank": "825",
+    "legalName": "International Business Machines Corporation",
+    "naicsCode": "511210",
+    "postalCode": "37238",
+    "companyType": "private",
+    "countryCode": "US",
+    "description": "IBM is a global technology company providing hybrid cloud, AI, and consulting services.",
+    "subIndustry": "Enterprise Software",
+    "yearFounded": 1911,
+    "emailPattern": "{first}.{last}",
+    "linkedinPage": "company/ibm",
+    "employeesRange": "310000-40000",
+    "estimatedAnnualRevenue": "€22B+"
+  },
+  "contact": {
+    "geo": {
+      "city": "New York City",
+      "state": "New York",
+      "country": "United States",
+      "countryCode": "US",
+      "fullAddress": "New York City, New York, United States"
+    },
+    "phone": "+44 8934039483",
+    "headline": "The Owner of the Famous SaaS",
+    "lastName": "Österling",
+    "linkedin": "https://www.linkedin.com/in/ACwAAAEAIjIBMvpchd41QtwQMhcGpQiXSu38wIM",
+    "position": "Owner",
+    "firstName": "Niclas",
+    "seniority": "Director",
+    "department": "Engineering",
+    "contactType": "Exact Visitor",
+    "listContacts": [
+      {
+        "domain": "build.com",
+        "picture": null,
+        "headline": "Developer",
+        "lastName": "Delle",
+        "position": "Developer",
+        "firstName": "MacAllister",
+        "verifiedOn": "2021-11-04T12:50:30.775Z",
+        "description": null,
+        "businessEmail": "allisterdelle@gmail.com",
+        "personalEmail": null,
+        "verifiedStatus": "valid"
+      }
+    ],
+    "businessEmail": "niclas.osterling@test.com",
+    "personalEmail": "",
+    "workspaceName": "Default Workspace",
+    "additionalContacts": [
+      {
+        "domain": "example.com",
+        "picture": null,
+        "headline": "CEO",
+        "lastName": "Doe",
+        "position": "CEO",
+        "firstName": "John",
+        "verifiedOn": "2021-11-04T12:50:30.775Z",
+        "description": null,
+        "businessEmail": "johndoe@gmail.com",
+        "personalEmail": null,
+        "verifiedStatus": "valid"
+      }
+    ],
+    "emailVerificationStatus": "valid"
+  },
+  "keyword": "",
+  "summary": {
+    "visits": 7,
+    "duration": null,
+    "lastSession": {
+      "city": "New York City",
+      "date": null,
+      "state": "New York",
+      "country": "US"
+    }
+  },
+  "visitor": {
+    "city": "New York City",
+    "state": "New York",
+    "country": "United States",
+    "countryCode": "US"
+  },
+  "clientId": "opea00cf6255bf1f1c8e074e",
+  "referrer": "google.com",
+  "websiteId": "test-website-id-987654321",
+  "customData": {
+    "plan": "enterprise",
+    "source": "google-ads",
+    "campaign": "summer-sale-2024",
+    "customField1": "custom-value-1",
+    "customField2": "custom-value-2"
+  },
+  "pageVisits": [
+    {
+      "path": "/",
+      "totalTime": 2034,
+      "visitCount": 3,
+      "queryParams": null
+    },
+    {
+      "path": "/pricing",
+      "totalTime": 202,
+      "visitCount": 1,
+      "queryParams": {
+        "utm_source": "google"
+      }
+    }
+  ],
+  "isFirstVisit": true,
+  "signalSources": [
+    "visit"
+  ],
+  "workspaceName": "Default Workspace",
+  "aiQualification": {
+    "budget_likelihood": 7,
+    "has_decision_maker": true,
+    "is_target_industry": true,
+    "fleet_software_need": 8
+  },
+  "isWebhookSentForFirstTime": true
+}
