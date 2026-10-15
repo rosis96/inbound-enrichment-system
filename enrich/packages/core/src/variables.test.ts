@@ -148,7 +148,7 @@ describe("validateVariable", () => {
 
   it("fails structure, placeholders, invented figures and unverified details", () => {
     expect(failing("We specialize in scaling {{companycategory}} developers. Also Hudson Yards is great.")).toEqual(
-      expect.arrayContaining(["placeholders", "brackets", "sentence-2"]),
+      expect.arrayContaining(["placeholders", "brackets"]),
     );
     expect(failing(`${GOOD_VP} It grew 40% last year.`)).toEqual(expect.arrayContaining(["sentences", "figures"]));
     expect(failing(GOOD_VP, { detailIds: ["D3"] })).toEqual(["evidence"]);
@@ -187,7 +187,7 @@ describe("generateVariables", () => {
 
   it("writes in dependency order, corrects a failed attempt and hands the finished value to dependents", async () => {
     const llm = fakeLlm([
-      ok({ variables: { value_proposition: { text: "We help developers. It is good.", resolved: {}, detailIds: [] } } }),
+      ok({ variables: { value_proposition: { text: "We help {{companycategory}}. It is good.", resolved: {}, detailIds: [] } } }),
       ok({ variables: { value_proposition: { text: GOOD_VP, resolved: { "{{companycategory}}": "mixed-use real estate developers" }, detailIds: ["D1"] } } }),
       ok({ variables: { reference: "In my last email, I mentioned how research-led positioning could strengthen Hudson Yards." } }),
     ]);
@@ -197,7 +197,7 @@ describe("generateVariables", () => {
     expect(costUsd).toBeCloseTo(0.03);
     expect(results.value_proposition).toMatchObject({ status: "ok", text: GOOD_VP, detailIds: ["D1"], sources: [{ url: "https://www.related.com/", label: "Hudson Yards" }] });
     expect(results.value_proposition!.attempts).toHaveLength(2);
-    expect(results.value_proposition!.attempts[0]!.problems.join(" ")).toMatch(/Sentence 2 starts with/);
+    expect(results.value_proposition!.attempts[0]!.problems.join(" ")).toMatch(/All placeholders resolved/);
     expect(llm.prompts[1]).toContain("Your previous attempt failed these checks");
     expect(llm.prompts[2]).toContain(`- value_proposition: "${GOOD_VP}"`);
     expect(results.reference).toMatchObject({ status: "ok", dependsOn: ["value_proposition"] });
@@ -206,7 +206,7 @@ describe("generateVariables", () => {
   });
 
   it("blocks dependents when a dependency never passes, and regenerates only what is asked", async () => {
-    const bad = ok({ variables: { value_proposition: "Too short." } });
+    const bad = ok({ variables: { value_proposition: "Too short {{companycategory}}." } });
     const { results } = await generateVariables({ context, plan, variables, maxCorrections: 1 }, fakeLlm([bad, bad]));
     expect(results.value_proposition!.status).toBe("failed");
     expect(results.reference).toMatchObject({ status: "blocked" });
@@ -215,7 +215,7 @@ describe("generateVariables", () => {
       { context, plan, variables: [VALUE_PROP], maxCorrections: 1 },
       fakeLlm([bad, ok({ variables: { value_proposition: "" } })]),
     );
-    expect(emptyFix.results.value_proposition).toMatchObject({ status: "failed", text: "Too short." });
+    expect(emptyFix.results.value_proposition).toMatchObject({ status: "failed", text: "Too short {{companycategory}}." });
     expect(emptyFix.results.value_proposition!.attempts).toHaveLength(2);
     expect(Object.keys(rejectedVariables(results))).toEqual(["reference", "value_proposition"]);
 

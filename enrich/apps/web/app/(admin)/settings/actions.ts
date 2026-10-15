@@ -78,7 +78,7 @@ export async function saveSettings(formData: FormData): Promise<void> {
     },
     pages: { ...existing.pages, highIntent: list(formData, "highIntent") },
     freeEmailDomains: list(formData, "freeEmailDomains").map((domain) => domain.toLowerCase()),
-    campaigns: { ...existing.campaigns, default: text(formData, "campaignDefault") },
+    campaigns: { ...existing.campaigns, default: text(formData, "campaignDefault"), generic: text(formData, "campaignGeneric") },
     copy: {
       ...existing.copy,
       aiVariablesEnabled: formData.get("aiVariablesEnabled") === "on",

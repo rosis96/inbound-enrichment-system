@@ -51,6 +51,8 @@ export const CampaignSettings = z.object({
   low: campaignId.optional(),
   // Empty until the client's Instantly campaign exists; push fails with `no_campaign` meanwhile.
   default: z.union([campaignId, z.literal("")]).default(""),
+  // Leads that could not be personalised (website unreadable or an AI variable missing) go here, without AI variables.
+  generic: z.union([campaignId, z.literal("")]).default(""),
 });
 
 export const CopySettings = z.object({

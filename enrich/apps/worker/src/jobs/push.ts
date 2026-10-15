@@ -37,15 +37,28 @@ export async function handlePush(data: LeadJobData, ctx: JobContext): Promise<vo
   }
 
   const settings = parseClientSettings(client.settings);
-  const campaignId = (lead.intentLevel && settings.campaigns[lead.intentLevel]) || settings.campaigns.default || null;
+  // Without a readable website or with an AI variable missing, the personalised email would read badly:
+  // send the lead to the generic campaign, if there is one, without any AI variables.
+  const missingVariables = settings.copy.aiVariablesEnabled
+    ? settings.aiVariables.map((v) => v.name).filter((name) => !contact.aiVariables?.[name])
+    : [];
+  const genericReason = !company.crawlText?.trim()
+    ? "website could not be read"
+    : missingVariables.length > 0
+      ? `AI variables missing: ${missingVariables.join(", ")}`
+      : null;
+  const generic = Boolean(genericReason && settings.campaigns.generic);
+  const campaignId = generic
+    ? settings.campaigns.generic
+    : (lead.intentLevel && settings.campaigns[lead.intentLevel]) || settings.campaigns.default || null;
   const body = buildInstantlyLead({
     campaignId,
-    contact: { ...contact, email: contact.email },
+    contact: { ...contact, email: contact.email, ...(generic ? { aiVariables: null } : {}) },
     company,
     lead,
     customVariables: settings.customVariables,
   });
-  const request = { method: "POST", url: INSTANTLY_LEADS_URL, body };
+  const request = { method: "POST", url: INSTANTLY_LEADS_URL, body, campaign: generic ? "generic" : "personalised", ...(genericReason ? { genericReason } : {}) };
 
   const test = await loadTestFlags(ctx.db, lead.rawEventId);
   const dryRunSource = ctx.env.GLOBAL_DRY_RUN ? "GLOBAL_DRY_RUN" : client.dryRun ? "client" : test?.dryRun ? "test lead" : null;

@@ -249,9 +249,12 @@ describe("multiple placeholders in one instruction", () => {
     });
   });
 
-  it("fails when the template's own wording or sentence structure is changed", () => {
-    expect(failing(VALUE_PROPOSITION, GOOD.replace("while solving challenges like", "and tackling issues such as"))).toEqual(["wording"]);
-    expect(failing(VALUE_PROPOSITION, GOOD.replace("And, I have seen how your", "Your"))).toEqual(expect.arrayContaining(["wording", "sentence-2"]));
+  it("warns when the template's own wording or a sentence opening is changed, and fails a changed sentence count", () => {
+    const status = (text: string, id: string) => check(VALUE_PROPOSITION, text).find((c) => c.id === id)?.status;
+    const reworded = GOOD.replace("while solving challenges like", "and tackling issues such as");
+    expect(failing(VALUE_PROPOSITION, reworded)).toEqual([]);
+    expect(status(reworded, "wording")).toBe("warn");
+    expect(status(GOOD.replace("And, I have seen how your", "Your"), "sentence-2")).toBe("warn");
     expect(failing(VALUE_PROPOSITION, GOOD.replace("alignment.\n\nAnd,", "alignment, and,"))).toEqual(expect.arrayContaining(["sentences"]));
   });
 });

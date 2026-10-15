@@ -611,14 +611,16 @@ export function validateVariable(input: ValidateInput): ValidationCheck[] {
 
   if (templateWording(variable.instructions).length > 0) {
     const missing = missingWording(variable.instructions, text);
-    add("wording", "Template wording kept", missing.length === 0, missing.length ? `changed or missing: ${missing.join(", ")}` : undefined);
+    // A warning only: small rewordings of the template read fine and should not throw a good text away.
+    add("wording", "Template wording kept", missing.length === 0 ? true : "warn", missing.length ? `changed or missing: ${missing.join(", ")}` : undefined);
   }
 
   const withoutMerge = text.replace(/\{\{[^{}]*\}\}/g, (token) => (isMailMergeToken(token) ? "" : token));
   add("brackets", "No brackets", !/[[\]{}<>]/.test(withoutMerge));
 
   const words = wordCount(text);
-  add("words", `${rules.minWords}-${rules.maxWords} words`, words >= rules.minWords && words <= rules.maxWords, `${words} words`);
+  // Too long fails; too short is only a warning.
+  add("words", `${rules.minWords}-${rules.maxWords} words`, words > rules.maxWords ? false : words >= rules.minWords ? true : "warn", `${words} words`);
   if (rules.maxChars) add("chars", `At most ${rules.maxChars} characters`, text.length <= rules.maxChars, `${text.length} characters`);
 
   const sentences = splitSentences(text);
@@ -629,7 +631,12 @@ export function validateVariable(input: ValidateInput): ValidationCheck[] {
   }
   for (const s of rules.sentenceStarts) {
     const sentence = sentences[s.sentence - 1];
-    add(`sentence-${s.sentence}`, `Sentence ${s.sentence} starts with "${s.text}"`, Boolean(sentence && startsWithText(sentence, s.text)), sentence ? undefined : "sentence missing");
+    add(
+      `sentence-${s.sentence}`,
+      `Sentence ${s.sentence} starts with "${s.text}"`,
+      sentence && startsWithText(sentence, s.text) ? true : "warn",
+      sentence ? undefined : "sentence missing",
+    );
   }
   if (rules.noCta) {
     const cta = CTA.exec(text)?.[0] ?? (/\?\s*$/.test(text) ? "ends with a question" : null);

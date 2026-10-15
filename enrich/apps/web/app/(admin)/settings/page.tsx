@@ -152,6 +152,14 @@ export default async function SettingsPage({
                     className="input font-mono"
                   />
                 </Field>
+                <Field label="Generic campaign ID" hint="UUID; for leads that could not be personalised">
+                  <input
+                    name="campaignGeneric"
+                    defaultValue={settings.campaigns.generic}
+                    placeholder="00000000-0000-0000-0000-000000000000"
+                    className="input font-mono"
+                  />
+                </Field>
                 <Field label="Instantly API key" hint={client.instantlyApiKeyEnc ? "set (encrypted); blank keeps it" : "not set"}>
                   <input
                     name="instantlyApiKey"
