@@ -150,7 +150,7 @@ export default async function LeadPage({
                   {Object.entries(selected.aiVariables).map(([name, value]) => (
                     <div key={name} className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
                       <dt className="font-mono text-xs text-slate-500">{`{{${name}}}`}</dt>
-                      <dd className="mt-1 text-sm text-slate-800">{value}</dd>
+                      <dd className="mt-1 text-sm whitespace-pre-line text-slate-800">{value}</dd>
                     </div>
                   ))}
                   {selected.personalisationMeta && (
