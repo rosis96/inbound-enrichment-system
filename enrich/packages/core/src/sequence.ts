@@ -145,7 +145,8 @@ export function checkSequence(
 /** Placeholder values as Instantly would see them for one lead. */
 export function instantlyPreviewValues(lead: InstantlyLeadRequest, sender: { firstName?: string } = {}): Record<string, string> {
   return {
-    ...lead.custom_variables,
+    // Back from Instantly's <br> to line breaks, which the preview shows as such.
+    ...Object.fromEntries(Object.entries(lead.custom_variables).map(([name, value]) => [name, value.replace(/<br\s*\/?>/gi, "\n")])),
     email: lead.email,
     ...(lead.first_name ? { firstName: lead.first_name } : {}),
     ...(lead.last_name ? { lastName: lead.last_name } : {}),

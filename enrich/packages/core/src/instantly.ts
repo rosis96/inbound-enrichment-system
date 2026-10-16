@@ -29,6 +29,14 @@ export interface InstantlyLeadInput {
   customVariables?: CustomVariable[];
 }
 
+/**
+ * Line breaks as Instantly shows them: its emails are HTML, where a plain newline collapses into a space.
+ * Variables sit inside the sequence's lines, so a break becomes <br> (a blank line becomes <br><br>).
+ */
+export function toInstantlyText(text: string): string {
+  return text.replace(/\r\n?/g, "\n").replace(/\n/g, "<br>");
+}
+
 /** Drops empty values; Instantly custom variables must be flat strings here. */
 function stringsOnly(values: Record<string, string | number | null | undefined>): Record<string, string> {
   const out: Record<string, string> = {};
@@ -79,6 +87,6 @@ export function buildInstantlyLead({
     ...(company.name ? { company_name: company.name } : {}),
     website: company.domain,
     skip_if_in_workspace: true,
-    custom_variables: { ...custom, ...ai, ...builtins },
+    custom_variables: Object.fromEntries(Object.entries({ ...custom, ...ai, ...builtins }).map(([name, value]) => [name, toInstantlyText(value)])),
   };
 }

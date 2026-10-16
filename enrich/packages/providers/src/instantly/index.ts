@@ -40,6 +40,11 @@ export function createInstantlyLead(apiKey: string, body: unknown, options: Requ
   return instantlyRequest("POST", INSTANTLY_LEADS_URL, apiKey, body, options);
 }
 
+/** PATCH /api/v2/leads/:id, e.g. to replace the variables of a lead that is already in a campaign. */
+export function updateInstantlyLead(apiKey: string, leadId: string, body: unknown, options: RequestOptions = {}): Promise<InstantlyResponse> {
+  return instantlyRequest("PATCH", `${INSTANTLY_LEADS_URL}/${encodeURIComponent(leadId)}`, apiKey, body, options);
+}
+
 /** POST /api/v2/campaigns: creates a paused campaign. `leadId` in the outcome is the new campaign id. */
 export function createInstantlyCampaign(apiKey: string, body: unknown, options: RequestOptions = {}): Promise<InstantlyResponse> {
   return instantlyRequest("POST", INSTANTLY_CAMPAIGNS_URL, apiKey, body, options);

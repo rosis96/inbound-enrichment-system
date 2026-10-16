@@ -1,6 +1,6 @@
 import { buildInstantlyLead } from "@enrich/core";
 import { and, contacts, eq, isNotNull, leads } from "@enrich/db";
-import { createInstantlyLead, INSTANTLY_LEADS_URL } from "@enrich/providers";
+import { createInstantlyLead, INSTANTLY_LEADS_URL, updateInstantlyLead } from "@enrich/providers";
 import { LeadJobData, parseClientSettings, QUEUE_RETRY, type LeadStatus } from "@enrich/shared";
 import { decryptSecret } from "@enrich/shared/crypto";
 import type { JobContext } from "../context";
@@ -58,7 +58,27 @@ export async function handlePush(data: LeadJobData, ctx: JobContext): Promise<vo
     lead,
     customVariables: settings.customVariables,
   });
-  const request = { method: "POST", url: INSTANTLY_LEADS_URL, body, campaign: generic ? "generic" : "personalised", ...(genericReason ? { genericReason } : {}) };
+  // Already in Instantly (pushed before, kept through a reprocess): replace its variables instead of adding it again,
+  // which `skip_if_in_workspace` would silently skip. It stays in the campaign it is in.
+  const existingId = contact.instantlyLeadId;
+  const wouldMoveTo = existingId && lead.campaignId && lead.campaignId !== campaignId ? campaignId : null;
+  const update = existingId
+    ? {
+        ...(body.first_name ? { first_name: body.first_name } : {}),
+        ...(body.last_name ? { last_name: body.last_name } : {}),
+        ...(body.company_name ? { company_name: body.company_name } : {}),
+        website: body.website,
+        custom_variables: body.custom_variables,
+      }
+    : null;
+  const request = {
+    method: existingId ? "PATCH" : "POST",
+    url: existingId ? `${INSTANTLY_LEADS_URL}/${existingId}` : INSTANTLY_LEADS_URL,
+    body: update ?? body,
+    campaign: generic ? "generic" : "personalised",
+    ...(genericReason ? { genericReason } : {}),
+    ...(wouldMoveTo ? { note: `would now go to campaign ${wouldMoveTo}; left in ${lead.campaignId}, move it in Instantly if needed` } : {}),
+  };
 
   const test = await loadTestFlags(ctx.db, lead.rawEventId);
   const dryRunSource = ctx.env.GLOBAL_DRY_RUN ? "GLOBAL_DRY_RUN" : client.dryRun ? "client" : test?.dryRun ? "test lead" : null;
@@ -81,8 +101,13 @@ export async function handlePush(data: LeadJobData, ctx: JobContext): Promise<vo
     return;
   }
 
+  // A lead already in Instantly stays pushed when only its update failed.
+  const pushedCampaign = existingId ? (lead.campaignId ?? campaignId) : campaignId;
+  const failedLead = (code: string) =>
+    existingId ? { status: "pushed" as const, skipReason: `variables not updated: ${code}`, campaignId: pushedCampaign } : { status: "failed" as const, skipReason: code, campaignId };
+
   const fail = async (code: string, output?: unknown) => {
-    await setLead({ status: "failed", skipReason: code, campaignId });
+    await setLead(failedLead(code));
     await recordStep(ctx, {
       leadId: lead.id,
       contactId: contact.id,
@@ -98,8 +123,25 @@ export async function handlePush(data: LeadJobData, ctx: JobContext): Promise<vo
   if (!campaignId) return fail("no_campaign");
   if (!client.instantlyApiKeyEnc) return fail("no_instantly_api_key");
 
-  const { outcome, durationMs } = await createInstantlyLead(decryptSecret(client.instantlyApiKeyEnc, ctx.env.ENCRYPTION_KEY), body);
+  const apiKey = decryptSecret(client.instantlyApiKeyEnc, ctx.env.ENCRYPTION_KEY);
+  const { outcome, durationMs } = existingId ? await updateInstantlyLead(apiKey, existingId, update) : await createInstantlyLead(apiKey, body);
   const response = { status: outcome.status, body: outcome.body };
+
+  if (outcome.kind === "ok" && existingId) {
+    await setLead({ status: "pushed", skipReason: null, campaignId: pushedCampaign });
+    await recordStep(ctx, {
+      leadId: lead.id,
+      contactId: contact.id,
+      step: "push",
+      provider: "instantly",
+      status: "ok",
+      input: request,
+      output: { updated: true, ...response },
+      durationMs,
+    });
+    ctx.logger.info({ instantlyLeadId: existingId }, "updated the lead's variables in Instantly");
+    return;
+  }
 
   if (outcome.kind === "ok") {
     await ctx.db.transaction(async (tx) => {
@@ -142,7 +184,7 @@ export async function handlePush(data: LeadJobData, ctx: JobContext): Promise<vo
     durationMs,
   });
   if (finalAttempt) {
-    await setLead({ status: "failed", skipReason: outcome.code, campaignId });
+    await setLead(failedLead(outcome.code));
     ctx.logger.error({ code: outcome.code }, "Instantly still failing after retries");
     return;
   }

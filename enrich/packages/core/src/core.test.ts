@@ -8,6 +8,7 @@ import { evaluateGates, type GateInput } from "./gates";
 import { PayloadError, parseHappierleadsPayload } from "./happierleads";
 import { parseEmployeeRange, scoreIcp } from "./icp";
 import { buildInstantlyLead } from "./instantly";
+import { instantlyPreviewValues } from "./sequence";
 import { countryCode, normaliseDomain, pathMatches, urlPath } from "./normalise";
 import { mentionsTracking } from "./personalise";
 import { renderTemplate, templatePlaceholders } from "./template";
@@ -234,6 +235,24 @@ describe("buildInstantlyLead", () => {
       enrichLeadId: "l1",
     });
     expect(Object.values(body.custom_variables).every((v) => typeof v === "string")).toBe(true);
+  });
+
+  it("sends line breaks in variables as <br>, and the preview turns them back", () => {
+    const body = buildInstantlyLead({
+      campaignId: null,
+      contact: {
+        email: "priya@northwind-analytics.example",
+        firstName: "Priya",
+        lastName: null,
+        title: null,
+        aiVariables: { value_proposition: "First paragraph.\n\nSecond paragraph.", reference: "Line one.\r\nLine two." },
+      },
+      company: { domain: "northwind-analytics.example", name: null, industry: null, country: null },
+      lead: { id: "l1", icpScore: null, intentLevel: null, intentTopic: null, pages: [] },
+    });
+    expect(body.custom_variables.value_proposition).toBe("First paragraph.<br><br>Second paragraph.");
+    expect(body.custom_variables.reference).toBe("Line one.<br>Line two.");
+    expect(instantlyPreviewValues(body).value_proposition).toBe("First paragraph.\n\nSecond paragraph.");
   });
 });
 

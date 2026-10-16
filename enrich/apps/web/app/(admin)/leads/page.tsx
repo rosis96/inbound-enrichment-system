@@ -2,19 +2,21 @@ import { and, asc, clients, companies, contacts, desc, eq, getDb, leads, like, o
 import { SHOW_ICP } from "@/lib/features";
 import { LEAD_STATUSES, type LeadStatus } from "@enrich/shared";
 import Link from "next/link";
+import { BulkSubmit, SelectAll } from "@/components/bulk-select";
 import { StatusBadge, statusLabel } from "@/components/status-badge";
-import { EmptyState, PageHeader, timeAgo } from "@/components/ui";
+import { Alert, EmptyState, PageHeader, timeAgo } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
+import { reprocessLeads } from "./actions";
 
 export const dynamic = "force-dynamic";
 
 const LIMIT = 200;
 
-type Params = { status?: string; client?: string; q?: string };
+type Params = { status?: string; client?: string; q?: string; bulk?: string };
 
 /** Builds a /leads URL keeping the other filters. */
 function href(params: Params, change: Params): string {
-  const merged = { ...params, ...change };
+  const merged = { ...params, bulk: undefined, ...change };
   const search = new URLSearchParams(Object.entries(merged).filter((entry): entry is [string, string] => Boolean(entry[1])));
   const query = search.toString();
   return query ? `/leads?${query}` : "/leads";
@@ -59,6 +61,8 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
   ]);
   const now = Date.now();
   const filtering = Boolean(status || params.client || q);
+  const back = href({ status: params.status, client: params.client, q: params.q }, {});
+  const queued = params.bulk && params.bulk !== "none" ? Number(params.bulk) : null;
 
   return (
     <>
@@ -68,6 +72,13 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
       />
 
       <div className="mb-4 space-y-3">
+        {queued !== null && (
+          <Alert tone="info">
+            Reprocessing {queued} lead{queued === 1 ? "" : "s"}. Each one re-runs research, AI writing and the push; leads already in Instantly get
+            their variables updated. Refresh in a minute or two.
+          </Alert>
+        )}
+        {params.bulk === "none" && <Alert tone="warning">Tick at least one lead to reprocess.</Alert>}
         <form className="flex flex-wrap items-center gap-2" action="/leads">
           {status && <input type="hidden" name="status" value={status} />}
           <input name="q" defaultValue={q} placeholder="Search company, domain or email" className="input max-w-xs" />
@@ -88,6 +99,10 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
             </Link>
           )}
         </form>
+        <form id="bulk" action={reprocessLeads} className="flex flex-wrap items-center justify-end gap-3">
+          <input type="hidden" name="back" value={back} />
+          <BulkSubmit form="bulk" label="Reprocess" />
+        </form>
         <div className="flex flex-wrap gap-1.5">
           <Link href={href(params, { status: undefined })} className={`chip ${!status ? "chip-active" : ""}`}>
             All
@@ -104,6 +119,9 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
         <table className="table">
           <thead>
             <tr>
+              <th className="w-8">
+                <SelectAll form="bulk" />
+              </th>
               <th>Company</th>
               <th>Status</th>
               {SHOW_ICP && <th className="text-right">ICP</th>}
@@ -116,7 +134,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={SHOW_ICP ? 7 : 6}>
+                <td colSpan={SHOW_ICP ? 8 : 7}>
                   {filtering ? (
                     <EmptyState title="No leads match these filters" />
                   ) : (
@@ -129,6 +147,9 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
             )}
             {rows.map((row) => (
               <tr key={row.id} className="transition hover:bg-slate-50">
+                <td>
+                  <input type="checkbox" form="bulk" name="leadId" value={row.id} aria-label={`Select ${row.companyName ?? row.domain}`} className="rounded border-slate-300" />
+                </td>
                 <td>
                   <Link href={`/leads/${row.id}`} className="font-medium text-slate-900 hover:text-brand-600">
                     {row.companyName ?? row.domain}

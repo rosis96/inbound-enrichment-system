@@ -345,6 +345,14 @@ function rulesList(rules: EffectiveRules): string[] {
   return lines;
 }
 
+function breakRules(variable: AiVariable): string[] {
+  const splits = splitMarkerCount(variable.instructions);
+  if (splits === 0) return [];
+  return [
+    `a paragraph break (a blank line, "\\n\\n" in the JSON string) exactly where the instructions say ||split||: ${splits} break${splits === 1 ? "" : "s"} in total; never write "||split||" itself`,
+  ];
+}
+
 function placeholderLine(p: Placeholder, values: Record<string, string | null>): string {
   if (p.kind === "variable") {
     return `- ${p.raw}: the already written ${p.ref} (shown above); continue or reference its exact idea instead of pasting it unless the instructions say to`;
@@ -420,7 +428,7 @@ export function buildWriterPrompt(input: WriterPromptInput): string {
       `### ${variable.name}`,
       `Instructions:\n"""\n${variable.instructions}\n"""`,
       `Placeholders:\n${placeholders.length > 0 ? placeholders.map((p) => placeholderLine(p, values)).join("\n") : "- none; follow the instructions"}`,
-      `Rules (checked automatically):\n${bulletList(rulesList(rules))}`,
+      `Rules (checked automatically):\n${bulletList([...rulesList(rules), ...breakRules(variable)])}`,
     ];
     if (deps.size > 0) parts.push(`Builds on: ${[...deps].join(", ")} (above). Stay consistent with it.`);
     if (variable.examples.length > 0) parts.push(`Good examples (style only; do not copy their facts):\n${bulletList(variable.examples)}`);
@@ -457,6 +465,7 @@ GENERAL RULES
 - Never invent projects, clients, results, numbers or percentages. Numbers may only come from the approved proof or the facts.
 - When a placeholder asks for a specific project or achievement and no listed detail fits, write a grounded general phrase and list that placeholder under insufficientEvidence.
 - Never mention a website visit, browsing, tracking or how we found them.
+- Format each snippet the way it will sit in the email. Subject lines and one- or two-sentence snippets are a single line. A longer snippet of three or more sentences, such as a follow-up, is split into short paragraphs of one to three sentences with a blank line ("\\n\\n") between them. Never break a line inside a sentence. Where the instructions say ||split||, always put a paragraph break there.
 - No brackets, emojis or generic flattery. Never use these phrases: ${copy.bannedPhrases.join(", ") || "none"}
 
 Return JSON: {"variables": {"<name>": {"text": "<finished text>", "resolved": {"<placeholder exactly as written>": "<text used for it>"}, "detailIds": ["<ids of details used>"], "insufficientEvidence": ["<placeholders without supporting evidence>"]}}} with every variable above.`;
@@ -476,10 +485,22 @@ export function parseWriterReply(json: unknown): Record<string, GeneratedVariabl
   return parsed.success ? parsed.data.variables : null;
 }
 
-/** Collapses spaces but keeps paragraph breaks, which templates may rely on. */
+/** `||split||` (any number of pipes ≥ 2, any case) in instructions: the text needs a paragraph break there. */
+const SPLIT_MARKER = /[ \t]*\|{2,}\s*split\s*\|{2,}[ \t]*/gi;
+
+/** Paragraph breaks the instructions ask for with `||split||`. */
+export function splitMarkerCount(instructions: string): number {
+  return instructions.match(SPLIT_MARKER)?.length ?? 0;
+}
+
+/** Paragraph breaks (blank lines) in a finished text. */
+export const paragraphBreaks = (text: string): number => text.match(/\n\s*\n/g)?.length ?? 0;
+
+/** Collapses spaces but keeps paragraph breaks, which templates may rely on. A `||split||` the writer copied becomes a break. */
 export function tidyText(text: string): string {
   return text
     .replace(/\r/g, "")
+    .replace(SPLIT_MARKER, "\n\n")
     .split("\n")
     .map((line) => line.replace(/[ \t]+/g, " ").trim())
     .join("\n")
@@ -543,6 +564,7 @@ const INSTRUCTION_START =
  */
 export function templateWording(instructions: string): string[][] {
   return instructions
+    .replace(SPLIT_MARKER, " ")
     .split(/\n\s*\n/)
     .map((paragraph) => paragraph.trim())
     .filter((paragraph) => (paragraph.match(/\{\{[^{}]+\}\}/g) ?? []).length >= 2 && !INSTRUCTION_START.test(paragraph))
@@ -613,6 +635,17 @@ export function validateVariable(input: ValidateInput): ValidationCheck[] {
     const missing = missingWording(variable.instructions, text);
     // A warning only: small rewordings of the template read fine and should not throw a good text away.
     add("wording", "Template wording kept", missing.length === 0 ? true : "warn", missing.length ? `changed or missing: ${missing.join(", ")}` : undefined);
+  }
+
+  const splits = splitMarkerCount(variable.instructions);
+  if (splits > 0) {
+    const breaks = paragraphBreaks(text);
+    add(
+      "breaks",
+      `${splits} paragraph break${splits === 1 ? "" : "s"} where the instructions say ||split||`,
+      breaks >= splits,
+      `${breaks} found`,
+    );
   }
 
   const withoutMerge = text.replace(/\{\{[^{}]*\}\}/g, (token) => (isMailMergeToken(token) ? "" : token));

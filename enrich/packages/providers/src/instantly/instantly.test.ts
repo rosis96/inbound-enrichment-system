@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createInstantlyCampaign, createInstantlyLead, updateInstantlyCampaign } from "./index";
+import { createInstantlyCampaign, createInstantlyLead, updateInstantlyCampaign, updateInstantlyLead } from "./index";
 
 const respond = (status: number, body: unknown, headers: Record<string, string> = {}) =>
   (async () => new Response(JSON.stringify(body), { status, headers })) as unknown as typeof fetch;
@@ -71,5 +71,19 @@ describe("Instantly campaigns", () => {
       { url: "https://api.instantly.ai/api/v2/campaigns", method: "POST" },
       { url: "https://api.instantly.ai/api/v2/campaigns/camp_1", method: "PATCH" },
     ]);
+  });
+});
+
+describe("updateInstantlyLead", () => {
+  it("PATCHes the lead by id", async () => {
+    let seen: { url: string; init: RequestInit } | undefined;
+    const fetchSpy = (async (url: string, init: RequestInit) => {
+      seen = { url, init };
+      return new Response(JSON.stringify({ id: "lead_1" }), { status: 200 });
+    }) as unknown as typeof fetch;
+    const { outcome } = await updateInstantlyLead("k", "lead_1", { custom_variables: { a: "b" } }, { fetch: fetchSpy });
+    expect(outcome).toMatchObject({ kind: "ok", leadId: "lead_1" });
+    expect(seen?.url).toBe("https://api.instantly.ai/api/v2/leads/lead_1");
+    expect(seen?.init.method).toBe("PATCH");
   });
 });

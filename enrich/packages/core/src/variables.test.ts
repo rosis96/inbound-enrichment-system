@@ -8,7 +8,10 @@ import {
   LlmTransientError,
   passedValues,
   rejectedVariables,
+  splitMarkerCount,
   splitSentences,
+  templateWording,
+  tidyText,
   validateVariable,
   verifyPlan,
   type LlmJsonCall,
@@ -178,6 +181,41 @@ describe("validateVariable", () => {
     const checks = check(text);
     expect(checks.find((c) => c.id === "figures")?.status).toBe("pass");
     expect(checks.find((c) => c.id === "names")).toMatchObject({ status: "warn", detail: expect.stringContaining("Atlantis Towers") });
+  });
+});
+
+describe("||split|| paragraph breaks", () => {
+  const { plan } = verifyPlan(planReply, context)!;
+  const SPLIT_VP: AiVariable = {
+    ...VALUE_PROP,
+    instructions: VALUE_PROP.instructions.replace(" And, I have seen", " |||Split||| And, I have seen"),
+  };
+  const [first, second] = GOOD_VP.split(" And, I have seen");
+  const run = (text: string) =>
+    validateVariable({ variable: SPLIT_VP, all: [SPLIT_VP], generated: { text, resolved: {}, detailIds: ["D1"], insufficientEvidence: [] }, plan, context, results: {} });
+
+  it("counts the marker in any spelling", () => {
+    expect(splitMarkerCount("a ||split|| b |||Split||| c || SPLIT || d")).toBe(3);
+    expect(splitMarkerCount("no marker | here")).toBe(0);
+  });
+
+  it("requires a paragraph break where the instructions split, and keeps the template wording check working", () => {
+    const withBreak = `${first}\n\nAnd, I have seen${second}`;
+    expect(run(withBreak).find((c) => c.id === "breaks")?.status).toBe("pass");
+    expect(run(withBreak).find((c) => c.id === "wording")?.status).not.toBe("warn");
+    expect(run(GOOD_VP).find((c) => c.id === "breaks")).toMatchObject({ status: "fail", detail: "0 found" });
+    expect(templateWording(SPLIT_VP.instructions).flat().join(" ")).not.toContain("split");
+  });
+
+  it("turns a copied marker into a break", () => {
+    expect(tidyText("One sentence. |||Split||| Two sentence.")).toBe("One sentence.\n\nTwo sentence.");
+    expect(run(`${first} ||split|| And, I have seen${second}`).find((c) => c.id === "breaks")?.status).toBe("pass");
+  });
+
+  it("tells the writer where to break", () => {
+    const prompt = buildWriterPrompt({ context, plan, all: [SPLIT_VP], tasks: [{ variable: SPLIT_VP }], results: {} });
+    expect(prompt).toContain("1 break in total");
+    expect(prompt).toContain("Where the instructions say ||split||, always put a paragraph break there.");
   });
 });
 
