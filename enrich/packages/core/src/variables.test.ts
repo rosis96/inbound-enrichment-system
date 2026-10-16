@@ -8,6 +8,7 @@ import {
   LlmTransientError,
   passedValues,
   rejectedVariables,
+  formatText,
   splitMarkerCount,
   splitSentences,
   templateWording,
@@ -210,6 +211,15 @@ describe("||split|| paragraph breaks", () => {
   it("turns a copied marker into a break", () => {
     expect(tidyText("One sentence. |||Split||| Two sentence.")).toBe("One sentence.\n\nTwo sentence.");
     expect(run(`${first} ||split|| And, I have seen${second}`).find((c) => c.id === "breaks")?.status).toBe("pass");
+  });
+
+  it("splits a long single-block text into two-sentence paragraphs, keeping breaks the writer chose", () => {
+    expect(formatText("In my last email, I wrote. We can also help. Our insight helps too. These strategies work.")).toBe(
+      "In my last email, I wrote. We can also help.\n\nOur insight helps too. These strategies work.",
+    );
+    expect(formatText("One. Two. Three.")).toBe("One. Two.\n\nThree.");
+    expect(formatText("One sentence. Two sentences.")).toBe("One sentence. Two sentences.");
+    expect(formatText("One. Two.\n\nThree. Four.")).toBe("One. Two.\n\nThree. Four.");
   });
 
   it("tells the writer where to break", () => {

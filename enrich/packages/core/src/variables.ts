@@ -496,6 +496,21 @@ export function splitMarkerCount(instructions: string): number {
 /** Paragraph breaks (blank lines) in a finished text. */
 export const paragraphBreaks = (text: string): number => text.match(/\n\s*\n/g)?.length ?? 0;
 
+/**
+ * The finished text as it goes into the email: tidied, and a text of three or more sentences that came back
+ * as one block is split into paragraphs of two sentences, as a follow-up email would read. Breaks the writer
+ * placed itself (or `||split||` asked for) are kept as they are.
+ */
+export function formatText(text: string): string {
+  const tidy = tidyText(text);
+  if (tidy.includes("\n")) return tidy;
+  const sentences = splitSentences(tidy);
+  if (sentences.length < 3) return tidy;
+  const paragraphs: string[] = [];
+  for (let i = 0; i < sentences.length; i += 2) paragraphs.push(sentences.slice(i, i + 2).join(" "));
+  return paragraphs.join("\n\n");
+}
+
 /** Collapses spaces but keeps paragraph breaks, which templates may rely on. A `||split||` the writer copied becomes a break. */
 export function tidyText(text: string): string {
   return text
@@ -604,7 +619,7 @@ export interface ValidateInput {
 /** Every check on one generated value; `fail` checks trigger a correction, `warn` checks are shown only. */
 export function validateVariable(input: ValidateInput): ValidationCheck[] {
   const { variable, all, generated, plan, context, results } = input;
-  const text = tidyText(generated.text);
+  const text = formatText(generated.text);
   const rules = effectiveRules(variable);
   const names = all.map((v) => v.name).filter((n) => n !== variable.name);
   const placeholders = parsePlaceholders(variable.instructions, names);
@@ -860,7 +875,7 @@ export async function generateVariables(input: GenerateInput, llm: LlmJsonCall):
       const next: AiVariable[] = [];
       for (const variable of todo) {
         const generated = written?.[variable.name] ?? { text: "", resolved: {}, detailIds: [], insufficientEvidence: [] };
-        const text = tidyText(generated.text);
+        const text = formatText(generated.text);
         const checks = written
           ? validateVariable({ variable, all: variables, generated, plan, context, results })
           : [{ id: "reply", label: "Writer reply readable", status: "fail" as const, detail: "reply did not match {variables: {...}}" }];
