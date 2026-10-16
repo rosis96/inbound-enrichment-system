@@ -204,6 +204,8 @@ export const ClientSettings = z
     aiVariables: z.array(AiVariable).max(10).default(DEFAULT_AI_VARIABLES as z.output<typeof AiVariable>[]),
     customVariables: z.array(CustomVariable).max(30).default([]),
     sequence: SequenceSettings.prefault({}),
+    // Emails of the generic campaign, for leads that could not be personalised; no AI variables.
+    genericSequence: SequenceSettings.prefault({}),
     campaignSetup: InstantlyCampaignSetup.prefault({}),
   })
   .superRefine((settings, ctx) => {

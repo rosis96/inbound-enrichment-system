@@ -11,9 +11,14 @@ import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
 
 type Notice = "saved" | "setup" | "created" | "updated";
+/** Which campaign's sequence: the personalised one, or the generic one for leads that could not be personalised. */
+type Kind = "personalised" | "generic";
 
-function back(clientId: string, params: { notice?: Notice; error?: string }): never {
+const kindOf = (formData: FormData): Kind => (formData.get("kind") === "generic" ? "generic" : "personalised");
+
+function back(clientId: string, kind: Kind, params: { notice?: Notice; error?: string }): never {
   const search = new URLSearchParams({ client: clientId });
+  if (kind === "generic") search.set("kind", "generic");
   if (params.notice) search.set("notice", params.notice);
   if (params.error) search.set("error", params.error);
   redirect(`/sequence?${search}#${params.notice === "setup" || params.notice === "created" || params.notice === "updated" ? "instantly" : "top"}`);
@@ -38,21 +43,24 @@ async function save(clientId: string, settings: ClientSettings) {
 
 export async function saveSequence(formData: FormData): Promise<void> {
   const client = await loadClient(formData);
+  const kind = kindOf(formData);
+  const key = kind === "generic" ? "genericSequence" : "sequence";
   const existing = parseClientSettings(client.settings);
   let steps: unknown = [];
   try {
     steps = JSON.parse(String(formData.get("steps") ?? "[]"));
   } catch {
-    back(client.id, { error: "Could not read the sequence" });
+    back(client.id, kind, { error: "Could not read the sequence" });
   }
-  const parsed = ClientSettings.safeParse({ ...existing, sequence: { ...existing.sequence, steps } });
-  if (!parsed.success) back(client.id, { error: issuesText(parsed.error) });
+  const parsed = ClientSettings.safeParse({ ...existing, [key]: { ...existing[key], steps } });
+  if (!parsed.success) back(client.id, kind, { error: issuesText(parsed.error) });
   await save(client.id, parsed.data);
-  back(client.id, { notice: "saved" });
+  back(client.id, kind, { notice: "saved" });
 }
 
 export async function saveCampaignSetup(formData: FormData): Promise<void> {
   const client = await loadClient(formData);
+  const kind = kindOf(formData);
   const existing = parseClientSettings(client.settings);
   const text = (name: string) => String(formData.get(name) ?? "").trim();
   const dailyLimit = Number(text("dailyLimit"));
@@ -72,9 +80,9 @@ export async function saveCampaignSetup(formData: FormData): Promise<void> {
       stopOnReply: formData.get("stopOnReply") === "on",
     },
   });
-  if (!parsed.success) back(client.id, { error: issuesText(parsed.error) });
+  if (!parsed.success) back(client.id, kind, { error: issuesText(parsed.error) });
   await save(client.id, parsed.data);
-  back(client.id, { notice: "setup" });
+  back(client.id, kind, { notice: "setup" });
 }
 
 /** Instantly's error message, if the body has one. */
@@ -87,35 +95,43 @@ function instantlyMessage(body: unknown): string {
   return typeof body === "string" ? body.slice(0, 300) : JSON.stringify(body).slice(0, 300);
 }
 
-/** Creates the client's Instantly campaign from the sequence, or replaces the sequence of the linked one. */
+/**
+ * Creates the client's Instantly campaign from the sequence, or replaces the sequence of the linked one.
+ * Both campaigns share the schedule and sending accounts; the generic one gets " – generic" after its name.
+ */
 export async function syncCampaign(formData: FormData): Promise<void> {
   const client = await loadClient(formData);
+  const kind = kindOf(formData);
+  const generic = kind === "generic";
+  const sequenceKey = generic ? "genericSequence" : "sequence";
+  const campaignKey = generic ? "generic" : "default";
   const settings = parseClientSettings(client.settings);
-  const { steps } = settings.sequence;
+  const { steps } = settings[sequenceKey];
 
-  const errors = checkSequence(steps, settings, knownPlaceholders(settings)).filter((issue) => issue.level === "error");
-  if (errors.length > 0) back(client.id, { error: `Fix the sequence first: ${errors.map((e) => e.message).join("; ")}` });
-  if (!client.instantlyApiKeyEnc) back(client.id, { error: "Set the Instantly API key in Settings first" });
+  const errors = checkSequence(steps, settings, knownPlaceholders(settings), { generic }).filter((issue) => issue.level === "error");
+  if (errors.length > 0) back(client.id, kind, { error: `Fix the sequence first: ${errors.map((e) => e.message).join("; ")}` });
+  if (!client.instantlyApiKeyEnc) back(client.id, kind, { error: "Set the Instantly API key in Settings first" });
 
   const apiKey = decryptSecret(client.instantlyApiKeyEnc, getEnv().ENCRYPTION_KEY);
-  const name = settings.campaignSetup.name || `${client.name} – inbound`;
+  const baseName = settings.campaignSetup.name || `${client.name} – inbound`;
+  const name = generic ? `${baseName} – generic` : baseName;
   const body = buildInstantlyCampaign(name, steps, settings.campaignSetup);
-  const existingId = settings.campaigns.default;
+  const existingId = settings.campaigns[campaignKey];
 
   const { outcome } = existingId
     ? await updateInstantlyCampaign(apiKey, existingId, body)
     : await createInstantlyCampaign(apiKey, body);
   if (outcome.kind !== "ok") {
-    back(client.id, { error: `Instantly ${outcome.status ?? "network error"}: ${instantlyMessage(outcome.body)}` });
+    back(client.id, kind, { error: `Instantly ${outcome.status ?? "network error"}: ${instantlyMessage(outcome.body)}` });
   }
 
   const campaignId = existingId || outcome.leadId;
-  if (!campaignId) back(client.id, { error: "Instantly created the campaign but returned no id; copy it from Instantly into Settings" });
+  if (!campaignId) back(client.id, kind, { error: "Instantly created the campaign but returned no id; copy it from Instantly into Settings" });
 
   await save(client.id, {
     ...settings,
-    campaigns: { ...settings.campaigns, default: campaignId },
-    sequence: { ...settings.sequence, lastSync: { at: new Date().toISOString(), campaignId } },
+    campaigns: { ...settings.campaigns, [campaignKey]: campaignId },
+    [sequenceKey]: { ...settings[sequenceKey], lastSync: { at: new Date().toISOString(), campaignId } },
   });
-  back(client.id, { notice: existingId ? "updated" : "created" });
+  back(client.id, kind, { notice: existingId ? "updated" : "created" });
 }

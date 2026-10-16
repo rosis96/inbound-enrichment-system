@@ -152,7 +152,7 @@ export default async function SettingsPage({
                     className="input font-mono"
                   />
                 </Field>
-                <Field label="Generic campaign ID" hint="UUID; for leads that could not be personalised">
+                <Field label="Generic campaign ID" hint="UUID; for leads that could not be personalised. Write its emails on Sequence → Generic">
                   <input
                     name="campaignGeneric"
                     defaultValue={settings.campaigns.generic}

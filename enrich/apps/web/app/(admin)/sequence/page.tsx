@@ -1,6 +1,7 @@
 import {
   buildInstantlyLead,
   checkSequence,
+  GENERIC_SEQUENCE_TEMPLATES,
   instantlyPreviewValues,
   renderParts,
   SEQUENCE_TEMPLATES,
@@ -50,7 +51,7 @@ function Parts({ parts }: { parts: RenderedPart[] }) {
 export default async function SequencePage({
   searchParams,
 }: {
-  searchParams: Promise<{ client?: string; lead?: string; notice?: string; error?: string }>;
+  searchParams: Promise<{ client?: string; kind?: string; lead?: string; notice?: string; error?: string }>;
 }) {
   await requireAdmin();
   const params = await searchParams;
@@ -75,12 +76,17 @@ export default async function SequencePage({
   }
 
   const settings = parseClientSettings(client.settings);
-  const { steps, lastSync } = settings.sequence;
+  // The generic campaign gets leads that could not be personalised, without AI variables.
+  const generic = params.kind === "generic";
+  const kind = generic ? "generic" : "personalised";
+  const kindQuery = generic ? "&kind=generic" : "";
+  const { steps, lastSync } = generic ? settings.genericSequence : settings.sequence;
   const setup = settings.campaignSetup;
   const known = knownPlaceholders(settings);
-  const issues = checkSequence(steps, settings, known);
+  const issues = checkSequence(steps, settings, known, { generic });
   const errors = issues.filter((i) => i.level === "error");
-  const campaignId = settings.campaigns.default;
+  const campaignId = generic ? settings.campaigns.generic : settings.campaigns.default;
+  const baseName = setup.name || `${client.name} – inbound`;
 
   // Recent leads with a chosen contact, for the preview.
   const previewLeads = await db
@@ -96,7 +102,7 @@ export default async function SequencePage({
     ? instantlyPreviewValues(
         buildInstantlyLead({
           campaignId: null,
-          contact: { ...preview.contact, email: preview.contact.email! },
+          contact: { ...preview.contact, email: preview.contact.email!, ...(generic ? { aiVariables: null } : {}) },
           company: preview.company,
           lead: preview.lead,
           customVariables: settings.customVariables,
@@ -106,7 +112,7 @@ export default async function SequencePage({
     : {};
 
   const chipGroups = [
-    { group: "AI", names: settings.aiVariables.map((v) => v.name) },
+    ...(generic ? [] : [{ group: "AI", names: settings.aiVariables.map((v) => v.name) }]),
     { group: "Custom", names: settings.customVariables.map((v) => v.name) },
     { group: "Lead", names: [...new Set([...INSTANTLY_SYSTEM_PLACEHOLDERS, ...BUILTIN_INSTANTLY_VARIABLES])].filter((n) => n !== "enrichLeadId") },
   ];
@@ -118,10 +124,29 @@ export default async function SequencePage({
         description={`The emails Instantly sends to ${client.name}'s leads. Variables are filled per lead.`}
       />
 
+      <div className="mb-6 flex flex-wrap items-center gap-3">
+        <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-sm">
+          {(["personalised", "generic"] as const).map((k) => (
+            <Link
+              key={k}
+              href={`/sequence?client=${client.id}${k === "generic" ? "&kind=generic" : ""}`}
+              className={`rounded-md px-3 py-1.5 ${k === kind ? "bg-brand-50 font-medium text-brand-700" : "text-slate-600 hover:text-slate-900"}`}
+            >
+              {k === "generic" ? "Generic" : "Personalised"}
+            </Link>
+          ))}
+        </div>
+        <span className="text-xs text-slate-500">
+          {generic
+            ? "For leads whose website could not be read or with an AI variable missing. They arrive without AI variables."
+            : "For leads with AI variables written from their website."}
+        </span>
+      </div>
+
       {allClients.length > 1 && (
         <div className="mb-6 flex flex-wrap gap-1.5">
           {allClients.map((c) => (
-            <Link key={c.id} href={`/sequence?client=${c.id}`} className={`chip ${c.id === client.id ? "chip-active" : ""}`}>
+            <Link key={c.id} href={`/sequence?client=${c.id}${kindQuery}`} className={`chip ${c.id === client.id ? "chip-active" : ""}`}>
               {c.name}
             </Link>
           ))}
@@ -136,12 +161,13 @@ export default async function SequencePage({
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_26rem]">
         <form action={saveSequence} className="min-w-0 space-y-4">
           <input type="hidden" name="clientId" value={client.id} />
+          <input type="hidden" name="kind" value={kind} />
           <SequenceEditor
-            // Remount after a save so the editor shows what was stored.
-            key={JSON.stringify(steps)}
+            // Remount after a save, or on switching campaign, so the editor shows what was stored.
+            key={`${kind}:${JSON.stringify(steps)}`}
             name="steps"
             initial={steps}
-            templates={SEQUENCE_TEMPLATES}
+            templates={generic ? GENERIC_SEQUENCE_TEMPLATES : SEQUENCE_TEMPLATES}
             variables={chipGroups}
           />
           <div className="sticky bottom-4 z-10 flex items-center justify-end gap-3 rounded-xl border border-slate-200 bg-white/90 px-4 py-3 shadow-lg backdrop-blur">
@@ -189,6 +215,7 @@ export default async function SequencePage({
               <div className="space-y-4">
                 <form className="flex gap-2" action="/sequence">
                   <input type="hidden" name="client" value={client.id} />
+                  {generic && <input type="hidden" name="kind" value="generic" />}
                   <select name="lead" defaultValue={preview.lead.id} className="input">
                     {previewLeads.map((row) => (
                       <option key={row.lead.id} value={row.lead.id}>
@@ -200,7 +227,7 @@ export default async function SequencePage({
                     Show
                   </button>
                 </form>
-                {!preview.contact.aiVariables && settings.aiVariables.length > 0 && (
+                {!generic && !preview.contact.aiVariables && settings.aiVariables.length > 0 && (
                   <Alert tone="warning">This lead has no AI variables yet; reprocess it to generate them.</Alert>
                 )}
                 {steps.map((step, i) => {
@@ -231,11 +258,11 @@ export default async function SequencePage({
 
           <Card
             id="instantly"
-            title="Instantly campaign"
+            title={generic ? "Generic Instantly campaign" : "Instantly campaign"}
             description={
               campaignId
                 ? "Linked. Pushing replaces the campaign's sequence and schedule with the ones here."
-                : "No campaign linked. Creating one makes a paused campaign in Instantly and links it to this client."
+                : `No campaign linked. Creating one makes a paused campaign "${generic ? `${baseName} – generic` : baseName}" in Instantly and links it to this client.`
             }
           >
             <div className="space-y-4">
@@ -249,6 +276,8 @@ export default async function SequencePage({
 
               <form action={saveCampaignSetup} className="space-y-3 text-sm">
                 <input type="hidden" name="clientId" value={client.id} />
+                <input type="hidden" name="kind" value={kind} />
+                <p className="text-xs text-slate-500">Shared by the personalised and generic campaigns.</p>
                 <label className="block">
                   <span className="text-xs font-medium text-slate-600">Campaign name</span>
                   <input name="name" defaultValue={setup.name} placeholder={`${client.name} – inbound`} className="input mt-1" />
@@ -309,9 +338,10 @@ export default async function SequencePage({
 
               <form action={syncCampaign} className="border-t border-slate-100 pt-4">
                 <input type="hidden" name="clientId" value={client.id} />
+                <input type="hidden" name="kind" value={kind} />
                 <button type="submit" className="btn-primary w-full" disabled={errors.length > 0 || steps.length === 0}>
                   <Icon name="bolt" className="size-4" />
-                  {campaignId ? "Push sequence to Instantly" : "Create campaign in Instantly"}
+                  {campaignId ? "Push sequence to Instantly" : generic ? "Create generic campaign in Instantly" : "Create campaign in Instantly"}
                 </button>
                 <p className="mt-2 text-xs text-slate-500">
                   Uses the saved sequence and campaign settings. {client.instantlyApiKeyEnc ? "" : "Needs the Instantly API key from Settings. "}

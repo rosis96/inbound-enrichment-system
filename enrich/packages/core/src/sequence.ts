@@ -46,6 +46,30 @@ export const SEQUENCE_TEMPLATES: SequenceTemplate[] = [
   },
 ];
 
+/** Starter sequences for the generic campaign: only variables every lead has, since generic leads arrive without AI variables. */
+export const GENERIC_SEQUENCE_TEMPLATES: SequenceTemplate[] = [
+  {
+    id: "generic-intro",
+    name: "Simple intro",
+    description: "Short intro to what you do, then a bump and a polite breakup.",
+    steps: [
+      step(0, "{{companyName}} and [your offer]", "Hi {{firstName}},\n\nI'm reaching out because we work with teams like {{companyName}} on [what you do].\n\n[One or two lines on what you do and the result you get.]\n\nWorth a quick conversation?\n\n{{sendingAccountFirstName}}"),
+      step(3, "", "Hi {{firstName}},\n\nJust bumping this up in case it got buried. Happy to share how this could look for {{companyName}}.\n\n{{sendingAccountFirstName}}"),
+      step(5, "", "Hi {{firstName}},\n\nI'll stop here so I don't clutter your inbox. If it's ever useful, just reply and I'll send over the details.\n\n{{sendingAccountFirstName}}"),
+    ],
+  },
+  {
+    id: "generic-role",
+    name: "Role based",
+    description: "Speaks to a common problem for the contact's role, then a proof point.",
+    steps: [
+      step(0, "quick question, {{firstName}}", "Hi {{firstName}},\n\nMost [their role]s we speak to [common pain]. We help by [one-line offer].\n\nIs that on your radar at {{companyName}}?\n\n{{sendingAccountFirstName}}"),
+      step(3, "", "Hi {{firstName}},\n\nWe recently helped [similar company] [result with a number] in [timeframe]. Happy to walk you through it.\n\n{{sendingAccountFirstName}}"),
+      step(5, "", "Hi {{firstName}},\n\nLast note from me. If timing isn't right, no problem at all.\n\n{{sendingAccountFirstName}}"),
+    ],
+  },
+];
+
 export interface SequenceIssue {
   level: "error" | "warning";
   /** 1-based step and variant (A, B, …); absent for whole-sequence issues. */
@@ -56,11 +80,26 @@ export interface SequenceIssue {
 
 export const variantLabel = (index: number) => String.fromCharCode(65 + index);
 
-/** Problems that would make the sequence send wrong or broken emails. Errors block pushing to Instantly. */
-export function checkSequence(steps: SequenceStep[], settings: ClientSettings, known: string[]): SequenceIssue[] {
+/**
+ * Problems that would make the sequence send wrong or broken emails. Errors block pushing to Instantly.
+ * `generic` checks the generic campaign's sequence, whose leads have no AI variables.
+ */
+export function checkSequence(
+  steps: SequenceStep[],
+  settings: ClientSettings,
+  known: string[],
+  { generic = false }: { generic?: boolean } = {},
+): SequenceIssue[] {
   const issues: SequenceIssue[] = [];
   if (steps.length === 0) issues.push({ level: "error", message: "Add at least one step" });
   const knownLower = new Map(known.map((name) => [name.toLowerCase(), name]));
+  const aiNames = new Set(settings.aiVariables.map((v) => v.name));
+  // Custom variables built from AI variables come out with gaps for generic leads.
+  const aiBacked = new Map(
+    settings.customVariables
+      .map((v) => [v.name, templatePlaceholders(v.value).filter((name) => aiNames.has(name))] as const)
+      .filter(([, used]) => used.length > 0),
+  );
 
   steps.forEach((s, stepIndex) => {
     s.variants.forEach((variant, variantIndex) => {
@@ -69,6 +108,15 @@ export function checkSequence(steps: SequenceStep[], settings: ClientSettings, k
       if (!variant.body.trim()) issues.push({ level: "error", ...at, message: "Body is empty" });
       const text = `${variant.subject}\n${variant.body}`;
       for (const name of templatePlaceholders(text)) {
+        if (generic && aiNames.has(name)) {
+          issues.push({ level: "error", ...at, message: `{{${name}}} is an AI variable; generic leads arrive without it` });
+          continue;
+        }
+        if (generic && aiBacked.has(name)) {
+          const used = aiBacked.get(name)!.map((n) => `{{${n}}}`).join(", ");
+          issues.push({ level: "warning", ...at, message: `{{${name}}} uses ${used}, which generic leads don't have` });
+          continue;
+        }
         if (known.includes(name)) continue;
         const caseMatch = knownLower.get(name.toLowerCase());
         issues.push({

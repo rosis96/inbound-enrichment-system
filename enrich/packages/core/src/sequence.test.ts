@@ -1,6 +1,13 @@
 import { knownPlaceholders, parseClientSettings } from "@enrich/shared";
 import { describe, expect, it } from "vitest";
-import { buildInstantlyCampaign, checkSequence, renderParts, SEQUENCE_TEMPLATES, textToInstantlyHtml } from "./sequence";
+import {
+  buildInstantlyCampaign,
+  checkSequence,
+  GENERIC_SEQUENCE_TEMPLATES,
+  renderParts,
+  SEQUENCE_TEMPLATES,
+  textToInstantlyHtml,
+} from "./sequence";
 
 const settings = parseClientSettings({
   copy: { bannedPhrases: ["synergy"] },
@@ -65,6 +72,39 @@ describe("buildInstantlyCampaign", () => {
 
   it("escapes HTML in plain text", () => {
     expect(textToInstantlyHtml("a < b")).toBe("<div>a &lt; b</div>");
+  });
+});
+
+describe("checkSequence for the generic campaign", () => {
+  const withAiCustom = parseClientSettings({
+    customVariables: [
+      { name: "calendarLink", value: "https://cal.com/x" },
+      { name: "opener", value: "{{personalized_first_line|Hope you are well}}" },
+    ],
+  });
+
+  it("rejects AI variables and warns about custom variables built from them", () => {
+    const issues = checkSequence(
+      [{ waitDays: 0, variants: [{ subject: "{{subject_line}}", body: "Hi {{firstName}},\n\n{{opener}} {{calendarLink}}" }] }],
+      withAiCustom,
+      knownPlaceholders(withAiCustom),
+      { generic: true },
+    );
+    expect(issues.map((i) => `${i.level}:${i.message}`)).toEqual([
+      "error:{{subject_line}} is an AI variable; generic leads arrive without it",
+      "warning:{{opener}} uses {{personalized_first_line}}, which generic leads don't have",
+    ]);
+  });
+
+  it("allows AI variables in the personalised sequence", () => {
+    expect(checkSequence(steps.slice(0, 1), withAiCustom, knownPlaceholders(withAiCustom))).toEqual([]);
+  });
+
+  it("ships starter templates without AI variables", () => {
+    for (const template of GENERIC_SEQUENCE_TEMPLATES) {
+      const errors = checkSequence(template.steps, settings, known, { generic: true }).filter((i) => i.level === "error");
+      expect(errors, template.id).toEqual([]);
+    }
   });
 });
 
