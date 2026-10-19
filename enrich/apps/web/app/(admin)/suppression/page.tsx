@@ -1,11 +1,15 @@
 import { and, asc, clients, count, desc, eq, getDb, gt, isNull, like, or, suppression, type SQL } from "@enrich/db";
-import { SUPPRESSION_REASONS, type SuppressionReason } from "@enrich/shared";
+import { listActiveCampaignPipelines, type ActiveCampaignPipeline } from "@enrich/providers";
+import { parseClientSettings, SUPPRESSION_REASONS, type SuppressionReason } from "@enrich/shared";
+import { decryptSecret } from "@enrich/shared/crypto";
+import { getEnv } from "@enrich/shared/env";
 import Link from "next/link";
+import { CopyButton } from "@/components/copy-button";
 import { Icon } from "@/components/icons";
 import { statusLabel } from "@/components/status-badge";
 import { Alert, Card, EmptyState, PageHeader } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
-import { addSuppression, removeSuppression } from "./actions";
+import { addSuppression, removeSuppression, saveActiveCampaign, syncActiveCampaignNow } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -19,18 +23,45 @@ const REASON_HINTS: Record<SuppressionReason, string> = {
   unsubscribed: "Unsubscribed from emails",
   bounced: "Email bounced",
   replied: "Already replied",
+  meeting_booked: "Booked a meeting with the client",
+  form_submitted: "Filled in a form on the client's site",
   manual: "Anything else",
 };
 
 export default async function SuppressionPage({
   searchParams,
 }: {
-  searchParams: Promise<{ client?: string; q?: string; reason?: string; added?: string; skipped?: string; removed?: string; error?: string }>;
+  searchParams: Promise<{
+    client?: string;
+    q?: string;
+    reason?: string;
+    added?: string;
+    skipped?: string;
+    suppressedLeads?: string;
+    removed?: string;
+    acSaved?: string;
+    acSync?: string;
+    error?: string;
+  }>;
 }) {
   await requireAdmin();
   const params = await searchParams;
   const db = getDb();
-  const allClients = await db.select({ id: clients.id, name: clients.name }).from(clients).orderBy(asc(clients.name));
+  const env = getEnv();
+  const allClients = await db
+    .select({
+      id: clients.id,
+      name: clients.name,
+      dryRun: clients.dryRun,
+      hasApiKey: clients.instantlyApiKeyEnc,
+      blocklistToken: clients.blocklistToken,
+      settings: clients.settings,
+      acApiKeyEnc: clients.activecampaignApiKeyEnc,
+      acSyncedAt: clients.activecampaignSyncedAt,
+      acError: clients.activecampaignError,
+    })
+    .from(clients)
+    .orderBy(asc(clients.name));
   const client = allClients.find((c) => c.id === params.client) ?? allClients[0];
   if (!client) {
     return (
@@ -49,15 +80,35 @@ export default async function SuppressionPage({
   if (reason) filters.push(eq(suppression.reason, reason));
   if (q) filters.push(like(suppression.value, `%${q}%`));
 
-  const [rows, byReason] = await Promise.all([
+  const ac = parseClientSettings(client.settings).activecampaign;
+  const [rows, byReason, [acCount], acPipelines] = await Promise.all([
     db.select().from(suppression).where(and(...filters)).orderBy(desc(suppression.createdAt)).limit(LIMIT),
     db
       .select({ reason: suppression.reason, n: count() })
       .from(suppression)
       .where(and(eq(suppression.clientId, client.id), or(isNull(suppression.expiresAt), gt(suppression.expiresAt, new Date()))))
       .groupBy(suppression.reason),
+    db
+      .select({ n: count() })
+      .from(suppression)
+      .where(and(eq(suppression.clientId, client.id), eq(suppression.source, "activecampaign"))),
+    // The stages to pick from; an error here shows next to the form rather than breaking the page.
+    ac.apiUrl && client.acApiKeyEnc
+      ? listActiveCampaignPipelines({ apiUrl: ac.apiUrl, apiKey: decryptSecret(client.acApiKeyEnc, env.ENCRYPTION_KEY) }).catch(
+          (error: unknown) => (error instanceof Error ? error.message : String(error)),
+        )
+      : Promise.resolve(null),
   ]);
   const total = byReason.reduce((t, r) => t + Number(r.n), 0);
+  // Why entries are not being copied to Instantly, if they are not.
+  const syncPaused = env.GLOBAL_DRY_RUN
+    ? "GLOBAL_DRY_RUN is on"
+    : client.dryRun
+      ? "the client is in dry run"
+      : !client.hasApiKey
+        ? "the client has no Instantly API key"
+        : null;
+  const webhookUrl = client.blocklistToken ? `${env.APP_URL}/api/hooks/blocklist/${client.blocklistToken}` : null;
   const now = Date.now();
   const href = (change: Record<string, string | undefined>) => {
     const merged = { client: client.id, q: q || undefined, reason, ...change };
@@ -85,11 +136,16 @@ export default async function SuppressionPage({
         {params.added && (
           <Alert tone="success">
             Added or updated {params.added} {params.added === "1" ? "entry" : "entries"}
-            {params.skipped && params.skipped !== "0" ? `; skipped ${params.skipped} that were not a domain or email` : ""}. New leads are checked against them;
-            use Reprocess on existing leads.
+            {params.skipped && params.skipped !== "0" ? `; skipped ${params.skipped} that were not a domain or email` : ""}. New leads are checked against them
+            {params.suppressedLeads && params.suppressedLeads !== "0"
+              ? `, and ${params.suppressedLeads} lead${params.suppressedLeads === "1" ? "" : "s"} already sent moved to Suppressed`
+              : ""}
+            . {syncPaused ? `Not sent to Instantly's blocklist while ${syncPaused}.` : "They go to Instantly's blocklist within a minute."}
           </Alert>
         )}
         {params.removed && <Alert tone="success">Removed.</Alert>}
+        {params.acSaved && <Alert tone="success">ActiveCampaign settings saved. The worker syncs within a minute, then every 10 minutes.</Alert>}
+        {params.acSync && <Alert tone="success">The worker syncs ActiveCampaign within a minute.</Alert>}
         {params.error && <Alert tone="error">{params.error}</Alert>}
       </div>
 
@@ -126,13 +182,14 @@ export default async function SuppressionPage({
                   <th>Reason</th>
                   <th>Source</th>
                   <th>Expires</th>
+                  <th>Instantly</th>
                   <th />
                 </tr>
               </thead>
               <tbody>
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={5}>
+                    <td colSpan={6}>
                       <EmptyState title={q || reason ? "Nothing matches" : "Nothing suppressed yet"}>
                         {!q && !reason && "Add competitors and existing customers so they never get cold emails."}
                       </EmptyState>
@@ -146,11 +203,27 @@ export default async function SuppressionPage({
                       <td>
                         <span className="font-mono text-sm text-slate-900">{row.value}</span>
                         <span className="ml-2 text-xs text-slate-400">{row.kind}</span>
+                        {row.note && <div className="text-xs text-slate-400">{row.note}</div>}
                       </td>
                       <td className="text-slate-600">{statusLabel(row.reason)}</td>
                       <td className="text-xs text-slate-500">{row.source}</td>
                       <td className="text-xs text-slate-500">
                         {row.expiresAt ? (expired ? "expired" : row.expiresAt.toISOString().slice(0, 10)) : "never"}
+                      </td>
+                      <td className="text-xs">
+                        {row.instantlyEntryId ? (
+                          <span className="text-emerald-700">{expired ? "removing" : "blocked"}</span>
+                        ) : row.instantlyError ? (
+                          <span className="text-red-600" title={row.instantlyError}>
+                            error
+                          </span>
+                        ) : expired ? (
+                          <span className="text-slate-400">—</span>
+                        ) : (
+                          <span className="text-slate-500" title={syncPaused ?? undefined}>
+                            {syncPaused ? "waiting" : "pending"}
+                          </span>
+                        )}
                       </td>
                       <td className="text-right">
                         <form action={removeSuppression}>
@@ -208,7 +281,145 @@ export default async function SuppressionPage({
             </button>
           </form>
         </Card>
+
+        <ActiveCampaignCard
+          clientId={client.id}
+          apiUrl={ac.apiUrl}
+          hasKey={Boolean(client.acApiKeyEnc)}
+          stageIds={ac.stageIds}
+          tags={ac.tags}
+          pipelines={acPipelines}
+          syncedAt={client.acSyncedAt}
+          error={client.acError}
+          entries={Number(acCount?.n ?? 0)}
+        />
+
+        {webhookUrl && (
+          <Card
+            title="Blocklist webhook"
+            description="Have the client's form or booking tool (directly, or through Zapier or Make) POST each submission here."
+            className="h-fit xl:col-start-2"
+          >
+            <div className="space-y-3 text-sm text-slate-600">
+              <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 py-1 pr-1 pl-3">
+                <span className="min-w-0 flex-1 truncate font-mono text-xs text-slate-700" title={webhookUrl}>
+                  {webhookUrl}
+                </span>
+                <CopyButton value={webhookUrl} />
+              </div>
+              <p>
+                JSON or form fields. Any field with &ldquo;email&rdquo; in its name is read (not the organiser&rsquo;s or host&rsquo;s), and{" "}
+                <code>website</code> or <code>domain</code> if sent. The email and the whole company are blocked; a Gmail-type address only
+                blocks the email.
+              </p>
+              <p>
+                Options: <code>?reason=meeting_booked</code> (default <code>form_submitted</code>), <code>&amp;block=email</code> or{" "}
+                <code>domain</code> (default both), <code>&amp;days=180</code> to expire, <code>&amp;source=calendly</code> as a note.
+              </p>
+            </div>
+          </Card>
+        )}
       </div>
     </>
+  );
+}
+
+function ActiveCampaignCard(props: {
+  clientId: string;
+  apiUrl: string;
+  hasKey: boolean;
+  stageIds: string[];
+  tags: string[];
+  /** Null without a URL and key; a string when ActiveCampaign could not be read. */
+  pipelines: ActiveCampaignPipeline[] | string | null;
+  syncedAt: Date | null;
+  error: string | null;
+  entries: number;
+}) {
+  const { pipelines } = props;
+  const selected = new Set(props.stageIds);
+  const configured = props.hasKey && props.apiUrl && (props.stageIds.length > 0 || props.tags.length > 0);
+  return (
+    <Card
+      title="ActiveCampaign"
+      description="Blocklists the client's CRM contacts: everyone on a deal in the chosen stages (open deal) and everyone with one of the tags (meeting booked). Email and company domain, as the webhook does. Synced every 10 minutes; only adds."
+      className="h-fit xl:col-start-2"
+    >
+      <div className="space-y-4 text-sm">
+        {configured && (
+          <div className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            <span>
+              {props.entries} {props.entries === 1 ? "entry" : "entries"} from ActiveCampaign ·{" "}
+              {props.syncedAt ? `synced ${props.syncedAt.toISOString().slice(0, 16).replace("T", " ")} UTC` : "sync pending"}
+            </span>
+            <form action={syncActiveCampaignNow}>
+              <input type="hidden" name="clientId" value={props.clientId} />
+              <button type="submit" className="font-medium text-brand-600 hover:underline">
+                Sync now
+              </button>
+            </form>
+          </div>
+        )}
+        {props.error && <Alert tone="error">Last sync: {props.error}</Alert>}
+        <form action={saveActiveCampaign} className="space-y-4">
+          <input type="hidden" name="clientId" value={props.clientId} />
+          <label className="block">
+            <span className="font-medium text-slate-700">API URL</span>
+            <span className="ml-2 text-xs text-slate-500">Settings → Developer</span>
+            <input name="acApiUrl" defaultValue={props.apiUrl} placeholder="https://acme.api-us1.com" className="input mt-1.5 font-mono text-xs" />
+          </label>
+          <label className="block">
+            <span className="font-medium text-slate-700">API key</span>
+            <span className="ml-2 text-xs text-slate-500">{props.hasKey ? "set (encrypted); blank keeps it" : "not set"}</span>
+            <input
+              name="acApiKey"
+              type="password"
+              autoComplete="off"
+              placeholder={props.hasKey ? "••••••••••••" : ""}
+              className="input mt-1.5 font-mono text-xs"
+            />
+          </label>
+          {props.hasKey && (
+            <label className="flex items-center gap-2 text-slate-600">
+              <input type="checkbox" name="acClearKey" className="rounded border-slate-300" /> Remove the stored API key (stops the sync)
+            </label>
+          )}
+          {typeof pipelines === "string" && <Alert tone="error">Could not read the pipelines: {pipelines}</Alert>}
+          {Array.isArray(pipelines) && (
+            <div>
+              <span className="font-medium text-slate-700">Deal stages</span>
+              <span className="ml-2 text-xs text-slate-500">contacts on deals in these stages are blocked</span>
+              <div className="mt-1.5 max-h-72 space-y-3 overflow-y-auto rounded-md border border-slate-200 p-3">
+                {pipelines.length === 0 && <p className="text-xs text-slate-500">No pipelines in this account.</p>}
+                {pipelines.map((pipeline) => (
+                  <fieldset key={pipeline.id}>
+                    <legend className="text-xs font-semibold text-slate-700">{pipeline.title}</legend>
+                    <div className="mt-1 space-y-1">
+                      {pipeline.stages.map((stage) => (
+                        <label key={stage.id} className="flex items-center gap-2 text-xs text-slate-600">
+                          <input type="checkbox" name="acStageIds" value={stage.id} defaultChecked={selected.has(stage.id)} className="rounded border-slate-300" />
+                          {stage.title}
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                ))}
+              </div>
+            </div>
+          )}
+          {/* Keep the chosen stages when the pipelines could not be listed. */}
+          {!Array.isArray(pipelines) && props.stageIds.map((id) => <input key={id} type="hidden" name="acStageIds" value={id} />)}
+          {pipelines === null && <p className="text-xs text-slate-500">Save the URL and key to pick deal stages.</p>}
+          <label className="block">
+            <span className="font-medium text-slate-700">Tags</span>
+            <span className="ml-2 text-xs text-slate-500">one per line, e.g. Meeting Booked</span>
+            <textarea name="acTags" defaultValue={props.tags.join("\n")} rows={3} className="input mt-1.5 font-mono text-xs" />
+          </label>
+          <button type="submit" className="btn-secondary w-full">
+            Save ActiveCampaign
+          </button>
+        </form>
+      </div>
+    </Card>
   );
 }

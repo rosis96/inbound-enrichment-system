@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { createInstantlyCampaign, createInstantlyLead, updateInstantlyCampaign, updateInstantlyLead } from "./index";
+import {
+  blocklistEntryIds,
+  createInstantlyBlocklistEntries,
+  createInstantlyCampaign,
+  createInstantlyLead,
+  deleteInstantlyBlocklistEntry,
+  updateInstantlyCampaign,
+  updateInstantlyLead,
+} from "./index";
 
 const respond = (status: number, body: unknown, headers: Record<string, string> = {}) =>
   (async () => new Response(JSON.stringify(body), { status, headers })) as unknown as typeof fetch;
@@ -85,5 +93,36 @@ describe("updateInstantlyLead", () => {
     expect(outcome).toMatchObject({ kind: "ok", leadId: "lead_1" });
     expect(seen?.url).toBe("https://api.instantly.ai/api/v2/leads/lead_1");
     expect(seen?.init.method).toBe("PATCH");
+  });
+});
+
+describe("Instantly blocklist", () => {
+  it("bulk-creates entries and maps the returned ids by value", async () => {
+    let seen: { url: string; init: RequestInit } | undefined;
+    const fetchSpy = (async (url: string, init: RequestInit) => {
+      seen = { url, init };
+      return new Response(JSON.stringify({ items: [{ id: "bl_1", bl_value: "Acme.com" }], valid_count: 1, invalid_count: 1 }), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const { outcome } = await createInstantlyBlocklistEntries("k", ["acme.com", "bad"], { fetch: fetchSpy });
+    expect(seen?.url).toBe("https://api.instantly.ai/api/v2/block-lists-entries/bulk-create");
+    expect(seen?.init.body).toBe('{"bl_values":["acme.com","bad"]}');
+    expect(blocklistEntryIds(outcome.body)).toEqual(new Map([["acme.com", "bl_1"]]));
+    expect(blocklistEntryIds(null).size).toBe(0);
+  });
+
+  it("deletes an entry without a body or JSON content type", async () => {
+    let seen: { url: string; init: RequestInit } | undefined;
+    const fetchSpy = (async (url: string, init: RequestInit) => {
+      seen = { url, init };
+      return new Response(JSON.stringify({ id: "bl_1" }), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const { outcome } = await deleteInstantlyBlocklistEntry("k", "bl_1", { fetch: fetchSpy });
+    expect(outcome.kind).toBe("ok");
+    expect(seen?.url).toBe("https://api.instantly.ai/api/v2/block-lists-entries/bl_1");
+    expect(seen?.init.method).toBe("DELETE");
+    expect(seen?.init.body).toBeUndefined();
+    expect(seen?.init.headers).toEqual({ authorization: "Bearer k" });
   });
 });

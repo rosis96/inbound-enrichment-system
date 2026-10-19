@@ -34,7 +34,27 @@ Admin UI at http://localhost:3000, login with `ADMIN_EMAIL` / `ADMIN_PASSWORD`:
   (sender, offer, tone, banned phrases, the services the client delivers and the proof it may cite), AI variables (name,
   instructions, word/character limits, exact sentences, required opening, "written after" dependencies, examples) and
   custom variables (`name = value` per line)
-- **Suppression**: per-client do-not-contact domains and emails (customer, open deal, competitor, …), added by pasting or CSV, with optional expiry; checked by the gates step
+- **Suppression**: per-client do-not-contact domains and emails (customer, open deal, competitor, meeting booked, form
+  submitted, …), added by pasting, CSV or the blocklist webhook, with optional expiry; checked by the gates step and again
+  just before push. Adding an entry moves the client's already-sent leads it matches to `suppressed`. The worker copies
+  active entries to the client's Instantly blocklist every minute (`POST /api/v2/block-lists-entries/bulk-create`), which
+  stops leads already in a campaign, and deletes the copy when an entry expires or is removed. Nothing is sent to
+  Instantly in dry run (global or the client's) or without the client's API key; the page shows each entry's sync state.
+- **Blocklist webhook** `POST /api/hooks/blocklist/:blocklistToken` (URL on Clients and Suppression): for the client's
+  form and booking tools, directly or through Zapier/Make. The tool is not known in advance, so the body (JSON, urlencoded
+  or multipart) is searched for the shallowest field with "email" in its name, plus `website`/`domain`, skipping
+  organiser, host, owner and team fields (`packages/core/src/suppression.ts`). Blocks the email and its company; a free
+  email domain only blocks the email, and the client's own domains are never blocked. Query options: `reason` (default
+  `form_submitted`), `block=both|email|domain`, `days`, `source`. Returns 422 with the field names when nothing usable is
+  found
+- **ActiveCampaign** (card on Suppression): for a client whose CRM is ActiveCampaign. With its API URL and key (encrypted),
+  the worker reads the CRM every 10 minutes (`apps/worker/src/activecampaign-sync.ts`) and adds the primary contact of
+  every deal in the chosen pipeline stages as `open_deal`, and every contact with one of the listed tags (e.g. a
+  "Meeting Booked" tag the client's booking tool or automation applies) as `meeting_booked`: the email and its company
+  domain, with the same free-email and own-domain rules as the webhook. Deals are matched by stage, not status, since
+  accounts often keep won/lost as stages. Only adds: values already suppressed keep their reason, and nothing is removed
+  when a deal or tag goes away. Runs in dry run too (it only writes this app's list); the blocklist sync above then
+  copies the entries to Instantly
 - **Test lead**: run any website and contact through the real pipeline, optionally without pushing, skipping the duplicate check, or re-reading the website
 - **Variable lab**: run a client's AI variables against any website without creating a lead. Shows each output with the
   resolved placeholders, the shared research plan, source links and every check; regenerate one variable (plus those

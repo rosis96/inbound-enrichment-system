@@ -188,6 +188,16 @@ export const InstantlyCampaignSetup = z.object({
   stopOnReply: z.boolean().default(true),
 });
 
+// The client's ActiveCampaign CRM: contacts on deals in these stages, or with these tags, are blocklisted.
+// The API key is stored encrypted on the client row, not here.
+export const ActiveCampaignSettings = z.object({
+  // e.g. https://acme.api-us1.com (Settings → Developer in ActiveCampaign).
+  apiUrl: z.union([z.url(), z.literal("")]).default(""),
+  stageIds: z.array(z.string().trim().min(1)).default([]),
+  // Tag names, matched without regard to case.
+  tags: stringList,
+});
+
 const reserved = new Set(BUILTIN_INSTANTLY_VARIABLES.map((name) => name.toLowerCase()));
 
 export const ClientSettings = z
@@ -207,6 +217,7 @@ export const ClientSettings = z
     // Emails of the generic campaign, for leads that could not be personalised; no AI variables.
     genericSequence: SequenceSettings.prefault({}),
     campaignSetup: InstantlyCampaignSetup.prefault({}),
+    activecampaign: ActiveCampaignSettings.prefault({}),
   })
   .superRefine((settings, ctx) => {
     // AI and custom variables share one namespace in Instantly.

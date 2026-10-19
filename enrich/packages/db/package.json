@@ -18,6 +18,7 @@
     "client:resonance": "tsx src/scripts/clients/resonance.ts"
   },
   "dependencies": {
+    "@enrich/core": "workspace:*",
     "@enrich/shared": "workspace:*",
     "drizzle-orm": "^0.45.4",
     "mysql2": "^3.24.5"

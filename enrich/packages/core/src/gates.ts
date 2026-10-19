@@ -87,13 +87,30 @@ export function evaluateGates(input: GateInput): GateResult {
   return { passed: true, eligibleContactIds, excludedContacts };
 }
 
+/**
+ * The suppression row that blocks this email (or, without one, the company domain), as
+ * `suppressed_email:<reason>` / `suppressed_domain:<reason>`, or undefined.
+ */
+export function suppressionMatch(
+  target: { email?: string | null; domain?: string | null },
+  suppression: SuppressionEntry[],
+): { code: string; entry: SuppressionEntry } | undefined {
+  const email = target.email?.toLowerCase();
+  if (email) {
+    const byEmail = suppression.find((row) => row.kind === "email" && row.value === email);
+    if (byEmail) return { code: `suppressed_email:${byEmail.reason}`, entry: byEmail };
+  }
+  for (const domain of [email ? emailDomain(email) : null, target.domain?.toLowerCase()]) {
+    const byDomain = domain ? domainSuppression(domain, suppression) : undefined;
+    if (byDomain) return { code: `suppressed_domain:${byDomain.reason}`, entry: byDomain };
+  }
+  return undefined;
+}
+
 function contactExclusion(email: string | null, input: GateInput): string | undefined {
   if (!email) return "no_email";
-  const suppressedEmail = input.suppression.find((row) => row.kind === "email" && row.value === email);
-  if (suppressedEmail) return `suppressed_email:${suppressedEmail.reason}`;
-  const domain = emailDomain(email);
-  const suppressedDomain = domainSuppression(domain, input.suppression);
-  if (suppressedDomain) return `suppressed_domain:${suppressedDomain.reason}`;
-  if (domainInList(domain, input.settings.freeEmailDomains)) return "free_email_domain";
+  const suppressed = suppressionMatch({ email }, input.suppression);
+  if (suppressed) return suppressed.code;
+  if (domainInList(emailDomain(email), input.settings.freeEmailDomains)) return "free_email_domain";
   return undefined;
 }

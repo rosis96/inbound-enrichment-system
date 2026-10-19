@@ -4,7 +4,7 @@ import high from "../../../scripts/samples/happierleads-high.json";
 import low from "../../../scripts/samples/happierleads-low.json";
 import real from "../../../scripts/samples/happierleads-real.json";
 import wrapped from "../../../scripts/samples/happierleads-lead.json";
-import { evaluateGates, type GateInput } from "./gates";
+import { evaluateGates, suppressionMatch, type GateInput } from "./gates";
 import { PayloadError, parseHappierleadsPayload } from "./happierleads";
 import { parseEmployeeRange, scoreIcp } from "./icp";
 import { buildInstantlyLead } from "./instantly";
@@ -313,5 +313,19 @@ describe("mentionsTracking", () => {
     ]) {
       expect(mentionsTracking(bad)).toBe(true);
     }
+  });
+});
+
+describe("suppressionMatch", () => {
+  const rows = [
+    { kind: "email" as const, value: "jane@acme.com", reason: "meeting_booked" as const },
+    { kind: "domain" as const, value: "beta.io", reason: "form_submitted" as const },
+  ];
+
+  it("matches an email, then the email's domain, then the company domain", () => {
+    expect(suppressionMatch({ email: "Jane@acme.com" }, rows)?.code).toBe("suppressed_email:meeting_booked");
+    expect(suppressionMatch({ email: "bob@acme.com" }, rows)).toBeUndefined();
+    expect(suppressionMatch({ email: "bob@mail.beta.io" }, rows)?.code).toBe("suppressed_domain:form_submitted");
+    expect(suppressionMatch({ email: "bob@gmail.com", domain: "beta.io" }, rows)?.code).toBe("suppressed_domain:form_submitted");
   });
 });

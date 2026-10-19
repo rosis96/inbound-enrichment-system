@@ -1,6 +1,9 @@
 export const INSTANTLY_API = "https://api.instantly.ai/api/v2";
 export const INSTANTLY_LEADS_URL = `${INSTANTLY_API}/leads`;
 export const INSTANTLY_CAMPAIGNS_URL = `${INSTANTLY_API}/campaigns`;
+export const INSTANTLY_BLOCKLIST_URL = `${INSTANTLY_API}/block-lists-entries`;
+/** Values per bulk-create call, Instantly's maximum. */
+export const INSTANTLY_BLOCKLIST_BATCH = 1000;
 
 export type InstantlyOutcome =
   /** 2xx: lead or campaign created/updated (a lead may be skipped by `skip_if_in_workspace`). */
@@ -55,8 +58,30 @@ export function updateInstantlyCampaign(apiKey: string, campaignId: string, body
   return instantlyRequest("PATCH", `${INSTANTLY_CAMPAIGNS_URL}/${encodeURIComponent(campaignId)}`, apiKey, body, options);
 }
 
+/** POST /api/v2/block-lists-entries/bulk-create: blocks up to 1000 emails or domains across the workspace. */
+export function createInstantlyBlocklistEntries(apiKey: string, values: string[], options: RequestOptions = {}): Promise<InstantlyResponse> {
+  return instantlyRequest("POST", `${INSTANTLY_BLOCKLIST_URL}/bulk-create`, apiKey, { bl_values: values }, options);
+}
+
+/** DELETE /api/v2/block-lists-entries/:id. */
+export function deleteInstantlyBlocklistEntry(apiKey: string, entryId: string, options: RequestOptions = {}): Promise<InstantlyResponse> {
+  return instantlyRequest("DELETE", `${INSTANTLY_BLOCKLIST_URL}/${encodeURIComponent(entryId)}`, apiKey, undefined, options);
+}
+
+/** Entry ids by blocked value from a bulk-create response; values Instantly rejected are missing. */
+export function blocklistEntryIds(body: unknown): Map<string, string> {
+  const ids = new Map<string, string>();
+  const items = body && typeof body === "object" && "items" in body && Array.isArray(body.items) ? body.items : [];
+  for (const item of items as unknown[]) {
+    if (!item || typeof item !== "object") continue;
+    const { id, bl_value: value } = item as Record<string, unknown>;
+    if (typeof id === "string" && typeof value === "string") ids.set(value.trim().toLowerCase(), id);
+  }
+  return ids;
+}
+
 async function instantlyRequest(
-  method: "POST" | "PATCH",
+  method: "POST" | "PATCH" | "DELETE",
   url: string,
   apiKey: string,
   body: unknown,
@@ -68,8 +93,9 @@ async function instantlyRequest(
   try {
     response = await doFetch(url, {
       method,
-      headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
-      body: JSON.stringify(body),
+      // A DELETE carries no body, and Instantly rejects a JSON content type without one.
+      headers: { authorization: `Bearer ${apiKey}`, ...(body === undefined ? {} : { "content-type": "application/json" }) },
+      body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(options.timeoutMs ?? 20_000),
     });
   } catch (error) {

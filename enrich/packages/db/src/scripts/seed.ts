@@ -2,7 +2,7 @@ import { generateToken } from "@enrich/shared/crypto";
 import { hashPassword } from "@enrich/shared/password";
 import { getEnv, loadRootEnvFile } from "@enrich/shared/env";
 import { PROMPT_KEYS } from "@enrich/shared";
-import { count, eq, sql } from "drizzle-orm";
+import { count, eq, isNull, sql } from "drizzle-orm";
 import { createDb } from "../client";
 import { adminUsers, clients, prompts, suppression } from "../schema";
 import { DEMO_CLIENT_SLUG, demoSettings, demoSuppression, promptsV1 } from "../seed-data";
@@ -36,6 +36,7 @@ try {
         autoApprove: false,
         happierleadsToken: generateToken(),
         instantlyWebhookToken: generateToken(),
+        blocklistToken: generateToken(),
         settings: demoSettings,
         monthlyBudgetUsd: 50,
       })
@@ -54,6 +55,13 @@ try {
     console.log(`  Happierleads webhook: ${env.APP_URL}/api/hooks/happierleads/${client.happierleadsToken}`);
     console.log(`  Instantly webhook:    ${env.APP_URL}/api/hooks/instantly/${client.instantlyWebhookToken}`);
   });
+
+  // Clients created before the blocklist webhook existed get their token here.
+  const withoutToken = await db.select({ id: clients.id }).from(clients).where(isNull(clients.blocklistToken));
+  for (const { id } of withoutToken) {
+    await db.update(clients).set({ blocklistToken: generateToken() }).where(eq(clients.id, id));
+  }
+  if (withoutToken.length > 0) console.log(`Added a blocklist webhook token to ${withoutToken.length} client(s)`);
 
   if (env.ADMIN_EMAIL && env.ADMIN_PASSWORD) {
     // Re-hashing on every seed lets ADMIN_PASSWORD be rotated by re-running the seed.

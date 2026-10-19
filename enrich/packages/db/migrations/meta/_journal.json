@@ -29,6 +29,20 @@
       "when": 1792066784601,
       "tag": "0003_variable_tests",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1792305999906,
+      "tag": "0004_blocklist",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1792396087414,
+      "tag": "0005_activecampaign",
+      "breakpoints": true
     }
   ]
 }

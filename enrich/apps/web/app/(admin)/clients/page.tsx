@@ -36,6 +36,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
       dryRun: clients.dryRun,
       token: clients.happierleadsToken,
       instantlyToken: clients.instantlyWebhookToken,
+      blocklistToken: clients.blocklistToken,
       leadCount: count(leads.id),
     })
     .from(clients)
@@ -91,6 +92,9 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
                 <div className="mt-4 grid grid-cols-1 gap-3 border-t border-slate-100 pt-4 md:grid-cols-2">
                   <UrlRow label="Happierleads webhook URL" url={`${env.APP_URL}/api/hooks/happierleads/${client.token}`} />
                   <UrlRow label="Instantly webhook URL" url={`${env.APP_URL}/api/hooks/instantly/${client.instantlyToken}`} />
+                  {client.blocklistToken && (
+                    <UrlRow label="Blocklist webhook URL (forms, bookings)" url={`${env.APP_URL}/api/hooks/blocklist/${client.blocklistToken}`} />
+                  )}
                 </div>
                 {client.leadCount > 0 && (
                   <details className="mt-4 border-t border-slate-100 pt-3">

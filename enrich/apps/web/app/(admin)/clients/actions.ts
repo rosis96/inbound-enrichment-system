@@ -57,6 +57,7 @@ export async function createClient(formData: FormData): Promise<void> {
     dryRun: true,
     happierleadsToken: generateToken(),
     instantlyWebhookToken: generateToken(),
+    blocklistToken: generateToken(),
     settings: ClientSettings.parse({ ownDomains: domains }),
   });
 

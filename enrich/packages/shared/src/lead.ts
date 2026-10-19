@@ -35,6 +35,8 @@ export const LEAD_STATUSES = [
   "pushed",
   "dry_run_complete",
   "failed",
+  // Blocklisted after it was pushed (or saved in dry run); the entry is also sent to Instantly's blocklist.
+  "suppressed",
 ] as const;
 export type LeadStatus = (typeof LEAD_STATUSES)[number];
 
@@ -65,11 +67,13 @@ export const SUPPRESSION_REASONS = [
   "unsubscribed",
   "bounced",
   "replied",
+  "meeting_booked",
+  "form_submitted",
   "manual",
 ] as const;
 export type SuppressionReason = (typeof SUPPRESSION_REASONS)[number];
 
-export const SUPPRESSION_SOURCES = ["csv", "instantly", "manual"] as const;
+export const SUPPRESSION_SOURCES = ["csv", "instantly", "manual", "webhook", "activecampaign"] as const;
 export type SuppressionSource = (typeof SUPPRESSION_SOURCES)[number];
 
 export const STEP_STATUSES = ["ok", "skipped", "failed"] as const;

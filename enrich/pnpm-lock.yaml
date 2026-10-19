@@ -214,6 +214,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@enrich/core':
+        specifier: workspace:*
+        version: link:../core
       '@enrich/shared':
         specifier: workspace:*
         version: link:../shared

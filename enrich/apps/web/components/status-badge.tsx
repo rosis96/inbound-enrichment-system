@@ -8,6 +8,7 @@ const STYLES: Partial<Record<LeadStatus, string>> = {
   awaiting_review: "bg-violet-50 text-violet-700 ring-violet-600/20",
   below_icp: "bg-amber-50 text-amber-700 ring-amber-600/20",
   gated_out: "bg-slate-100 text-slate-600 ring-slate-500/20",
+  suppressed: "bg-orange-50 text-orange-700 ring-orange-600/20",
   no_contact: "bg-slate-100 text-slate-600 ring-slate-500/20",
   no_valid_email: "bg-slate-100 text-slate-600 ring-slate-500/20",
   rejected: "bg-slate-100 text-slate-600 ring-slate-500/20",

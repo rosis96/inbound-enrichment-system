@@ -1,5 +1,5 @@
-import { buildInstantlyLead } from "@enrich/core";
-import { and, contacts, eq, isNotNull, leads } from "@enrich/db";
+import { buildInstantlyLead, suppressionMatch } from "@enrich/core";
+import { and, contacts, eq, gt, isNotNull, isNull, leads, or, suppression } from "@enrich/db";
 import { createInstantlyLead, INSTANTLY_LEADS_URL, updateInstantlyLead } from "@enrich/providers";
 import { LeadJobData, parseClientSettings, QUEUE_RETRY, type LeadStatus } from "@enrich/shared";
 import { decryptSecret } from "@enrich/shared/crypto";
@@ -33,6 +33,27 @@ export async function handlePush(data: LeadJobData, ctx: JobContext): Promise<vo
   if (!contact?.email) {
     await setLead({ status: "no_contact", skipReason: "no eligible contact with an email" });
     await recordStep(ctx, { leadId: lead.id, step: "push", provider: "instantly", status: "skipped", error: "no_contact" });
+    return;
+  }
+
+  // The gates ran minutes ago; a form fill or booking may have blocklisted the lead since.
+  const activeSuppression = await ctx.db
+    .select({ kind: suppression.kind, value: suppression.value, reason: suppression.reason })
+    .from(suppression)
+    .where(and(eq(suppression.clientId, client.id), or(isNull(suppression.expiresAt), gt(suppression.expiresAt, new Date()))));
+  const suppressed = suppressionMatch({ email: contact.email, domain: company.domain }, activeSuppression);
+  if (suppressed) {
+    await setLead({ status: "gated_out", skipReason: `${suppressed.code} (blocklisted before push)` });
+    await recordStep(ctx, {
+      leadId: lead.id,
+      contactId: contact.id,
+      step: "push",
+      provider: "instantly",
+      status: "skipped",
+      output: { blocklisted: suppressed.entry },
+      error: suppressed.code,
+    });
+    ctx.logger.info({ reason: suppressed.code }, "blocklisted before push, not sent");
     return;
   }
 
