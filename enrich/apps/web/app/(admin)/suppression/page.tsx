@@ -144,8 +144,8 @@ export default async function SuppressionPage({
           </Alert>
         )}
         {params.removed && <Alert tone="success">Removed.</Alert>}
-        {params.acSaved && <Alert tone="success">ActiveCampaign settings saved. The worker syncs within a minute, then every 10 minutes.</Alert>}
-        {params.acSync && <Alert tone="success">The worker syncs ActiveCampaign within a minute.</Alert>}
+        {params.acSaved && <Alert tone="success">ActiveCampaign settings saved. The worker syncs within a minute, then every 5 minutes.</Alert>}
+        {params.acSync && <Alert tone="success">Resync started: the worker reads ActiveCampaign within a minute; refresh to see the new entries.</Alert>}
         {params.error && <Alert tone="error">{params.error}</Alert>}
       </div>
 
@@ -342,7 +342,7 @@ function ActiveCampaignCard(props: {
   return (
     <Card
       title="ActiveCampaign"
-      description="Blocklists the client's CRM contacts: everyone on a deal in the chosen stages (open deal) and everyone with one of the tags (meeting booked). Email and company domain, as the webhook does. Synced every 10 minutes; only adds."
+      description="Blocklists the client's CRM contacts: everyone on a deal in the chosen stages (open deal) and everyone with one of the tags (meeting booked). Email and company domain, as the webhook does. Synced every 5 minutes; only adds."
       className="h-fit xl:col-start-2"
     >
       <div className="space-y-4 text-sm">
@@ -354,8 +354,8 @@ function ActiveCampaignCard(props: {
             </span>
             <form action={syncActiveCampaignNow}>
               <input type="hidden" name="clientId" value={props.clientId} />
-              <button type="submit" className="font-medium text-brand-600 hover:underline">
-                Sync now
+              <button type="submit" className="btn-secondary shrink-0 px-2.5 py-1 text-xs">
+                <Icon name="refresh" className="size-3.5" /> Resync now
               </button>
             </form>
           </div>

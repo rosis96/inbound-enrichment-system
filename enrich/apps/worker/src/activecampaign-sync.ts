@@ -8,7 +8,7 @@ import type { WorkerContext } from "./context";
 /** How often the worker looks for clients that are due. */
 export const ACTIVECAMPAIGN_TICK_MS = 60_000;
 /** How long after a sync a client is synced again. */
-export const ACTIVECAMPAIGN_SYNC_EVERY_MS = 10 * 60_000;
+export const ACTIVECAMPAIGN_SYNC_EVERY_MS = 5 * 60_000;
 
 type Entry = ParsedSuppression & { reason: SuppressionReason; note: string };
 

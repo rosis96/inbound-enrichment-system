@@ -48,7 +48,7 @@ Admin UI at http://localhost:3000, login with `ADMIN_EMAIL` / `ADMIN_PASSWORD`:
   `form_submitted`), `block=both|email|domain`, `days`, `source`. Returns 422 with the field names when nothing usable is
   found
 - **ActiveCampaign** (card on Suppression): for a client whose CRM is ActiveCampaign. With its API URL and key (encrypted),
-  the worker reads the CRM every 10 minutes (`apps/worker/src/activecampaign-sync.ts`) and adds the primary contact of
+  the worker reads the CRM every 5 minutes (or on "Resync now") (`apps/worker/src/activecampaign-sync.ts`) and adds the primary contact of
   every deal in the chosen pipeline stages as `open_deal`, and every contact with one of the listed tags (e.g. a
   "Meeting Booked" tag the client's booking tool or automation applies) as `meeting_booked`: the email and its company
   domain, with the same free-email and own-domain rules as the webhook. Deals are matched by stage, not status, since
