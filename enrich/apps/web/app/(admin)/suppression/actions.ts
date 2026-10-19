@@ -85,9 +85,19 @@ export async function saveActiveCampaign(formData: FormData): Promise<void> {
   const parsed = ActiveCampaignSettings.safeParse({
     apiUrl: String(formData.get("acApiUrl") ?? "").trim().replace(/\/+$/, ""),
     stageIds: formData.getAll("acStageIds").map(String),
-    tags: String(formData.get("acTags") ?? "").split(/\r?\n/),
+    tags: String(formData.get("acTags") ?? "")
+      .split(/\r?\n/)
+      .map((tag) => tag.trim())
+      .filter(Boolean),
   });
-  if (!parsed.success) back(client.id, { error: "ActiveCampaign API URL must be a full URL, e.g. https://acme.api-us1.com" });
+  if (!parsed.success) {
+    const urlIssue = parsed.error.issues.some((issue) => issue.path[0] === "apiUrl");
+    back(client.id, {
+      error: urlIssue
+        ? "ActiveCampaign API URL must be a full URL, e.g. https://acme.api-us1.com"
+        : `ActiveCampaign: ${parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("; ")}`,
+    });
+  }
 
   const env = getEnv();
   const typedKey = String(formData.get("acApiKey") ?? "").trim();
