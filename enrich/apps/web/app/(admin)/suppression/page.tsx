@@ -165,14 +165,27 @@ export default async function SuppressionPage({
               );
             })}
           </div>
-          <form action="/suppression" className="flex gap-2">
-            <input type="hidden" name="client" value={client.id} />
-            {reason && <input type="hidden" name="reason" value={reason} />}
-            <input name="q" defaultValue={q} placeholder="Search domain or email" className="input max-w-xs" />
-            <button type="submit" className="btn-secondary">
-              Search
-            </button>
-          </form>
+          <div className="flex flex-wrap items-center gap-2">
+            <form action="/suppression" className="flex min-w-0 flex-1 gap-2">
+              <input type="hidden" name="client" value={client.id} />
+              {reason && <input type="hidden" name="reason" value={reason} />}
+              <input name="q" defaultValue={q} placeholder="Search domain or email" className="input max-w-xs" />
+              <button type="submit" className="btn-secondary">
+                Search
+              </button>
+            </form>
+            {ac.apiUrl && client.acApiKeyEnc && (
+              <form action={syncActiveCampaignNow} className="flex items-center gap-2">
+                <input type="hidden" name="clientId" value={client.id} />
+                <span className="text-xs text-slate-500">
+                  ActiveCampaign {client.acSyncedAt ? `synced ${client.acSyncedAt.toISOString().slice(11, 16)} UTC` : "sync pending"}
+                </span>
+                <button type="submit" className="btn-secondary">
+                  <Icon name="refresh" className="size-4" /> Resync now
+                </button>
+              </form>
+            )}
+          </div>
 
           <div className="table-wrap">
             <table className="table">
